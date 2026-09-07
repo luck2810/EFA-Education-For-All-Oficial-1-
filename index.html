@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EducaAcessível | Aprenda no seu próprio ritmo</title>
+  <meta name="description" content="Plataforma educacional adaptável para perfis neurotípicos e neurodivergentes." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <a href="#conteudo-principal" class="sr-only-focusable">Pular para o conteúdo principal</a>
+
+  <div class="barra-acessibilidade" role="region" aria-label="Ferramentas de Acessibilidade">
+    <div class="barra-conteudo">
+      <div class="barra-grupo">
+        <button type="button" id="btn-diminuir" aria-label="Diminuir tamanho do texto">A-</button>
+        <button type="button" id="btn-aumentar" aria-label="Aumentar tamanho do texto">A+</button>
+        <button type="button" id="btn-dislexia" aria-pressed="false">Fonte para Dislexia</button>
+      </div>
+      <div class="barra-grupo">
+        <button type="button" id="btn-foco" aria-pressed="false">Ativar Modo Foco</button>
+        <button type="button" id="btn-tema" aria-label="Alternar entre tema claro e escuro">Alternar Tema</button>
+      </div>
+    </div>
+  </div>
+
+  <header class="cabecalho-principal">
+    <div class="cabecalho-conteudo">
+      <h1 class="logo">EducaAcessível</h1>
+      <nav aria-label="Navegação Principal">
+        <ul class="menu-navegacao">
+          <li><a href="#" aria-current="page">Início</a></li>
+          <li><a href="#secao-aulas">Aulas</a></li>
+        </ul>
+      </nav>
+      <div class="area-login">
+        <span id="info-usuario" class="info-usuario" hidden></span>
+        <button type="button" id="btn-google" class="btn-login">Entrar com Google</button>
+        <button type="button" id="btn-sair" class="btn-login" hidden>Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="banner-introducao" aria-labelledby="titulo-boas-vindas">
+    <div class="banner-conteudo">
+      <div>
+        <h2 id="titulo-boas-vindas">Aprenda no seu próprio ritmo</h2>
+        <p>Uma plataforma educacional adaptável para perfis neurotípicos e neurodivergentes.</p>
+        <div class="barra-busca" role="search">
+          <label class="sr-only" for="campo-busca">Buscar aulas por título</label>
+          <input type="search" id="campo-busca" placeholder="Digite o que deseja aprender..." />
+          <label class="sr-only" for="filtro-perfil">Filtrar aulas por perfil</label>
+          <select id="filtro-perfil">
+            <option value="todos">Todos os perfis</option>
+            <option value="tdah">TDAH</option>
+            <option value="tea">TEA</option>
+            <option value="dislexia">Dislexia</option>
+            <option value="baixa-visao">Baixa visão</option>
+            <option value="neurotipico">Neurotípico</option>
+          </select>
+        </div>
+      </div>
+      <img src="img/ilustracao-banner.png" alt="Ilustração de estudantes diversos aprendendo juntos, de forma inclusiva" />
+    </div>
+  </section>
+
+  <main id="conteudo-principal">
+    <section id="secao-aulas" aria-labelledby="titulo-grid">
+      <h2 id="titulo-grid">Nossas Aulas Disponíveis</h2>
+      <div id="grid-aulas" class="grid-aulas"></div>
+      <p id="sem-resultados" class="sem-resultados" role="status" hidden>
+        Nenhuma aula encontrada para os filtros selecionados.
+      </p>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    <p>EducaAcessível — Educação para todos, adaptada para cada forma de aprender.</p>
+  </footer>
+
+  <!-- Firebase (SDK compat, necessário para o login com Google) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
