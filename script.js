@@ -1,7 +1,8 @@
 // EducaAcessível — script.js
-// Funcionalidades de acessibilidade, busca, filtro e login.
+// Acessibilidade, catálogo, busca, filtro e login com Google.
 
-// ---------- Aulas ----------
+// ---------- AULAS ----------
+
 var AULAS = [
   {
     titulo: "5 Táticas de Estudo Eficazes para TDAH",
@@ -54,7 +55,8 @@ var AULAS = [
 ];
 
 
-// ---------- Acessibilidade ----------
+// ---------- ACESSIBILIDADE ----------
+
 var tamanhoFonte = 16;
 
 function alterarTamanhoFonte(delta) {
@@ -63,6 +65,7 @@ function alterarTamanhoFonte(delta) {
   if (novo < 12 || novo > 24) return;
 
   tamanhoFonte = novo;
+
   document.documentElement.style.fontSize = tamanhoFonte + "px";
 }
 
@@ -105,7 +108,7 @@ function alternarTema() {
 }
 
 
-// ---------- Firebase ----------
+// ---------- CONFIGURAÇÃO FIREBASE ----------
 
 var FIREBASE_CONFIG = {
   apiKey: "AIzaSyCqxlREb8FG0LjG3KrgjWPg_lSVI6Dzdgk",
@@ -121,13 +124,13 @@ var FIREBASE_CONFIG = {
 var firebasePronto = false;
 
 
+// ---------- INICIAR FIREBASE ----------
+
 function iniciarFirebase() {
   var botao = document.getElementById("btn-google");
 
   if (typeof firebase === "undefined") {
-    console.error(
-      "Firebase não foi carregado. Verifique os scripts do Firebase no HTML."
-    );
+    console.error("Firebase não foi carregado.");
 
     if (botao) {
       botao.disabled = true;
@@ -163,21 +166,22 @@ function iniciarFirebase() {
 }
 
 
-// ---------- Mensagens de erro ----------
+// ---------- MENSAGENS DE ERRO ----------
 
 function mensagemDeErro(erro) {
 
   var codigo = erro && erro.code ? erro.code : "";
 
   if (codigo === "auth/popup-blocked") {
-    return "O pop-up foi bloqueado pelo navegador.";
+    return "O navegador bloqueou a janela de login.";
   }
 
-  if (
-    codigo === "auth/popup-closed-by-user" ||
-    codigo === "auth/cancelled-popup-request"
-  ) {
+  if (codigo === "auth/popup-closed-by-user") {
     return "Login cancelado.";
+  }
+
+  if (codigo === "auth/cancelled-popup-request") {
+    return "A solicitação de login foi cancelada.";
   }
 
   if (codigo === "auth/unauthorized-domain") {
@@ -192,97 +196,78 @@ function mensagemDeErro(erro) {
     return "Problema de conexão. Verifique sua internet.";
   }
 
-  if (
-    codigo === "auth/invalid-api-key" ||
-    codigo === "auth/configuration-not-found"
-  ) {
-    return "A configuração do Firebase está incorreta.";
+  if (codigo === "auth/invalid-api-key") {
+    return "A configuração do Firebase possui um erro.";
   }
 
   return "Não foi possível entrar com o Google.";
 }
 
 
-// ---------- Login Google ----------
+// ---------- LOGIN COM GOOGLE ----------
 
 function entrarComGoogle() {
 
   if (!firebasePronto) {
-    alert("Firebase ainda não foi iniciado.");
+    alert("O Firebase ainda não foi iniciado.");
     return;
   }
 
   var provedor = new firebase.auth.GoogleAuthProvider();
 
+  // Sempre mostra a escolha da conta
   provedor.setCustomParameters({
     prompt: "select_account"
   });
 
 
-  // Detecta celular
-  var noCelular =
-    /Android|iPhone|iPad|iPod|Mobile/i.test(
-      navigator.userAgent
-    );
+  // Usa POPUP também no celular.
+  // Isso evita o erro de "missing initial state"
+  // causado pelo signInWithRedirect.
 
+  firebase.auth()
+    .signInWithPopup(provedor)
+    .then(function(resultado) {
 
-  var tentativa;
+      console.log(
+        "Login realizado:",
+        resultado.user.email
+      );
 
-  if (noCelular) {
+    })
+    .catch(function(erro) {
 
-    // Melhor opção para celular
-    tentativa = firebase
-      .auth()
-      .signInWithRedirect(provedor);
+      console.error("Erro no login Google:", erro);
 
-  } else {
+      alert(mensagemDeErro(erro));
 
-    // Computador
-    tentativa = firebase
-      .auth()
-      .signInWithPopup(provedor);
-  }
-
-
-  return tentativa.catch(function (erro) {
-
-    console.error("Erro no login Google:", erro);
-
-    alert(mensagemDeErro(erro));
-
-  });
+    });
 }
 
 
-// ---------- Botão Google ----------
+// ---------- BOTÃO GOOGLE ----------
 
 function aoClicarBotaoGoogle() {
 
   if (!firebasePronto) {
-
-    alert(
-      "O Firebase não está disponível. Verifique a configuração."
-    );
-
+    alert("Firebase indisponível.");
     return;
   }
-
 
   var usuario = firebase.auth().currentUser;
 
 
-  // Se já está logado, troca de conta
+  // Se já existe usuário, troca de conta
   if (usuario) {
 
-    firebase
-      .auth()
+    firebase.auth()
       .signOut()
-      .then(function () {
+      .then(function() {
 
         entrarComGoogle();
 
       })
-      .catch(function (erro) {
+      .catch(function(erro) {
 
         console.error("Erro ao trocar conta:", erro);
 
@@ -298,7 +283,7 @@ function aoClicarBotaoGoogle() {
 }
 
 
-// ---------- Mostrar usuário ----------
+// ---------- MOSTRAR USUÁRIO ----------
 
 function mostrarUsuario(usuario) {
 
@@ -331,8 +316,6 @@ function mostrarUsuario(usuario) {
     }
 
 
-    console.log("Usuário logado:", usuario.email);
-
   } else {
 
     if (info) {
@@ -354,7 +337,7 @@ function mostrarUsuario(usuario) {
 }
 
 
-// ---------- Catálogo ----------
+// ---------- CATÁLOGO ----------
 
 function normalizar(texto) {
 
@@ -374,12 +357,14 @@ function criarCard(aula) {
 
 
   var titulo = document.createElement("h3");
+
   titulo.textContent = aula.titulo;
 
 
   var etiqueta = document.createElement("span");
 
   etiqueta.className = "tag-perfil";
+
   etiqueta.textContent = aula.etiqueta;
 
 
@@ -396,27 +381,40 @@ function criarCard(aula) {
   var linkVideo = document.createElement("a");
 
   linkVideo.className = "btn-acesso";
+
   linkVideo.href = aula.youtube;
+
   linkVideo.target = "_blank";
+
   linkVideo.rel = "noopener noreferrer";
+
   linkVideo.textContent = "🎥 Assistir aula";
 
 
   var linkDoc = document.createElement("a");
 
   linkDoc.className = "btn-acesso desbloquear";
+
   linkDoc.href = aula.documento;
+
   linkDoc.target = "_blank";
+
   linkDoc.rel = "noopener noreferrer";
+
   linkDoc.textContent = "📄 Material adaptado";
 
 
   acoes.appendChild(linkVideo);
+
   acoes.appendChild(linkDoc);
 
+
   card.appendChild(titulo);
+
   card.appendChild(etiqueta);
+
   card.appendChild(descricao);
+
   card.appendChild(acoes);
 
 
@@ -424,13 +422,16 @@ function criarCard(aula) {
 }
 
 
-// ---------- Busca e filtro ----------
+// ---------- BUSCA E FILTRO ----------
 
 function renderizarAulas() {
 
   var campoBusca = document.getElementById("campo-busca");
+
   var filtroPerfil = document.getElementById("filtro-perfil");
+
   var grid = document.getElementById("grid-aulas");
+
   var aviso = document.getElementById("sem-resultados");
 
 
@@ -443,13 +444,14 @@ function renderizarAulas() {
     campoBusca.value.trim()
   );
 
+
   var perfil = filtroPerfil.value;
 
 
   grid.innerHTML = "";
 
 
-  var visiveis = AULAS.filter(function (aula) {
+  var visiveis = AULAS.filter(function(aula) {
 
     var texto =
       normalizar(aula.titulo) +
@@ -472,7 +474,7 @@ function renderizarAulas() {
   });
 
 
-  visiveis.forEach(function (aula) {
+  visiveis.forEach(function(aula) {
 
     grid.appendChild(
       criarCard(aula)
@@ -484,25 +486,22 @@ function renderizarAulas() {
   if (aviso) {
     aviso.hidden = visiveis.length !== 0;
   }
-
 }
 
 
-// ---------- Inicialização ----------
+// ---------- INICIALIZAÇÃO ----------
 
 document.addEventListener(
   "DOMContentLoaded",
-  function () {
+  function() {
 
-    // Tema salvo
+    // Carregar tema salvo
     try {
 
       if (
         localStorage.getItem("tema") === "dark"
       ) {
-
         document.documentElement.classList.add("dark");
-
       }
 
     } catch (erro) {
@@ -510,7 +509,7 @@ document.addEventListener(
     }
 
 
-    // Botões de acessibilidade
+    // Acessibilidade
 
     var btnDiminuir =
       document.getElementById("btn-diminuir");
@@ -529,87 +528,56 @@ document.addEventListener(
 
 
     if (btnDiminuir) {
-
       btnDiminuir.addEventListener(
         "click",
-        function () {
+        function() {
           alterarTamanhoFonte(-2);
         }
       );
-
     }
 
 
     if (btnAumentar) {
-
       btnAumentar.addEventListener(
         "click",
-        function () {
+        function() {
           alterarTamanhoFonte(2);
         }
       );
-
     }
 
 
     if (btnDislexia) {
-
       btnDislexia.addEventListener(
         "click",
-        function () {
+        function() {
           alternarDislexia(this);
         }
       );
-
     }
 
 
     if (btnFoco) {
-
       btnFoco.addEventListener(
         "click",
-        function () {
+        function() {
           alternarFoco(this);
         }
       );
-
     }
 
 
     if (btnTema) {
-
       btnTema.addEventListener(
         "click",
         alternarTema
       );
-
     }
 
 
-    // Inicia Firebase
+    // Firebase
 
-    if (iniciarFirebase()) {
-
-      firebase
-        .auth()
-        .getRedirectResult()
-        .catch(function (erro) {
-
-          console.error(
-            "Erro no retorno do login:",
-            erro
-          );
-
-          if (
-            erro.code !==
-            "auth/popup-closed-by-user"
-          ) {
-            alert(mensagemDeErro(erro));
-          }
-
-        });
-
-    }
+    iniciarFirebase();
 
 
     // Botão Google
@@ -619,12 +587,10 @@ document.addEventListener(
 
 
     if (btnGoogle) {
-
       btnGoogle.addEventListener(
         "click",
         aoClicarBotaoGoogle
       );
-
     }
 
 
@@ -638,23 +604,21 @@ document.addEventListener(
 
       btnSair.addEventListener(
         "click",
-        function () {
+        function() {
 
-          if (firebasePronto) {
+          if (!firebasePronto) return;
 
-            firebase
-              .auth()
-              .signOut()
-              .catch(function (erro) {
 
-                console.error(
-                  "Erro ao sair:",
-                  erro
-                );
+          firebase.auth()
+            .signOut()
+            .catch(function(erro) {
 
-              });
+              console.error(
+                "Erro ao sair:",
+                erro
+              );
 
-          }
+            });
 
         }
       );
@@ -667,31 +631,29 @@ document.addEventListener(
     var campoBusca =
       document.getElementById("campo-busca");
 
-    var filtroPerfil =
-      document.getElementById("filtro-perfil");
-
-
     if (campoBusca) {
-
       campoBusca.addEventListener(
         "input",
         renderizarAulas
       );
-
     }
 
 
-    if (filtroPerfil) {
+    // Filtro
 
+    var filtroPerfil =
+      document.getElementById("filtro-perfil");
+
+    if (filtroPerfil) {
       filtroPerfil.addEventListener(
         "change",
         renderizarAulas
       );
-
     }
 
 
-    // Renderiza catálogo
+    // Mostrar aulas
+
     renderizarAulas();
 
   }
