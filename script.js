@@ -1,13 +1,16 @@
-// EducaAcessível — script.js
-// Acessibilidade, login com Google (Firebase), banco de dados (Firestore),
-// criação de aulas, análise do administrador, EFA Coins, desbloqueio e Premium.
+// ============================================================
+// EFA - Education For All
+// script.js
+// ============================================================
 
 // ---------- Estado geral ----------
-var AULAS = [];        // aulas aprovadas (catálogo público)
-var TODAS_AULAS = [];  // todas as aulas (uso do administrador)
-var MINHAS_AULAS = []; // aulas enviadas pelo usuário logado
-var TRANSACOES = [];   // histórico de EFA Coins do usuário logado
+
+var AULAS = [];
+var TODAS_AULAS = [];
+var MINHAS_AULAS = [];
+var TRANSACOES = [];
 var idsDesbloqueadas = {};
+
 var usuarioAtual = null;
 var saldoMoedas = 0;
 var premiumAtivo = false;
@@ -15,7 +18,11 @@ var aulaEmEdicao = null;
 var firebasePronto = false;
 var ouvintesUsuario = [];
 
-// ---------- Aulas iniciais ----------
+
+// ============================================================
+// AULAS INICIAIS
+// ============================================================
+
 var AULAS_INICIAIS = [
   {
     titulo: "5 Táticas de Estudo Eficazes para TDAH",
@@ -67,13 +74,19 @@ var AULAS_INICIAIS = [
   }
 ];
 
-// ---------- Acessibilidade ----------
+
+// ============================================================
+// ACESSIBILIDADE
+// ============================================================
+
 var tamanhoFonte = 16;
 
 function alterarTamanhoFonte(delta) {
   var novo = tamanhoFonte + delta;
 
-  if (novo < 12 || novo > 24) return;
+  if (novo < 12 || novo > 24) {
+    return;
+  }
 
   tamanhoFonte = novo;
   document.documentElement.style.fontSize = tamanhoFonte + "px";
@@ -82,37 +95,48 @@ function alterarTamanhoFonte(delta) {
 function alternarDislexia(botao) {
   var ativo = document.body.classList.toggle("fonte-dislexia");
 
-  botao.setAttribute(
-    "aria-pressed",
-    ativo ? "true" : "false"
-  );
+  if (botao) {
+    botao.setAttribute(
+      "aria-pressed",
+      ativo ? "true" : "false"
+    );
+  }
 }
 
 function alternarFoco(botao) {
   var ativo = document.body.classList.toggle("modo-foco-ativo");
 
-  botao.textContent = ativo
-    ? "Desativar Modo Foco"
-    : "Ativar Modo Foco";
+  if (botao) {
+    botao.textContent = ativo
+      ? "Desativar Modo Foco"
+      : "Ativar Modo Foco";
 
-  botao.setAttribute(
-    "aria-pressed",
-    ativo ? "true" : "false"
-  );
+    botao.setAttribute(
+      "aria-pressed",
+      ativo ? "true" : "false"
+    );
+  }
 }
 
 function alternarTema() {
-  var escuro = document.documentElement.classList.toggle("dark");
+  var escuro =
+    document.documentElement.classList.toggle("dark");
 
   try {
     localStorage.setItem(
       "tema",
       escuro ? "dark" : "light"
     );
-  } catch (erro) {}
+  } catch (erro) {
+    console.warn("Não foi possível salvar o tema.", erro);
+  }
 }
 
-// ---------- Login com Google ----------
+
+// ============================================================
+// FIREBASE
+// ============================================================
+
 var FIREBASE_CONFIG = {
   apiKey: "AIzaSyCqxlREb8FG0LjG3KrgjWPg_lSVI6Dzdgk",
   authDomain: "efa-education-for-all.firebaseapp.com",
@@ -131,7 +155,7 @@ function iniciarFirebase() {
     !FIREBASE_CONFIG.apiKey
   ) {
     console.error(
-      "Firebase nao configurado."
+      "Firebase não está disponível ou não foi configurado."
     );
 
     if (botao) {
@@ -141,16 +165,31 @@ function iniciarFirebase() {
     return false;
   }
 
-  if (!firebase.apps.length) {
-    firebase.initializeApp(FIREBASE_CONFIG);
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+
+    firebase.auth().onAuthStateChanged(mostrarUsuario);
+
+    firebasePronto = true;
+
+    return true;
+
+  } catch (erro) {
+    console.error(
+      "Erro ao inicializar Firebase:",
+      erro
+    );
+
+    return false;
   }
-
-  firebase.auth().onAuthStateChanged(mostrarUsuario);
-
-  firebasePronto = true;
-
-  return true;
 }
+
+
+// ============================================================
+// ERROS DO LOGIN
+// ============================================================
 
 function mensagemDeErro(erro) {
   var codigo = erro && erro.code
@@ -169,28 +208,46 @@ function mensagemDeErro(erro) {
   }
 
   if (codigo === "auth/unauthorized-domain") {
-    return "Este dominio nao esta autorizado no Firebase. Adicione o endereco do site em Authentication > Settings > Authorized domains.";
+    return "Este domínio não está autorizado no Firebase. Adicione o endereço do site em Authentication > Settings > Authorized domains.";
   }
 
   if (codigo === "auth/operation-not-allowed") {
-    return "O login com Google nao esta ativado no projeto Firebase.";
+    return "O login com Google não está ativado no Firebase. Vá em Authentication > Sign-in method e ative Google.";
   }
 
   if (codigo === "auth/network-request-failed") {
-    return "Problema de conexao. Verifique sua internet e tente novamente.";
+    return "Problema de conexão. Verifique sua internet.";
   }
 
   if (
     codigo === "auth/invalid-api-key" ||
     codigo === "auth/configuration-not-found"
   ) {
-    return "Configuracao do Firebase incorreta. Confira a apiKey e o appId no script.js.";
+    return "A configuração do Firebase está incorreta.";
   }
 
-  return "Nao foi possivel entrar com o Google. Tente novamente.";
+  if (codigo === "auth/internal-error") {
+    return "O Firebase apresentou um erro interno. Tente novamente.";
+  }
+
+  return "Não foi possível entrar com o Google.";
 }
 
+
+// ============================================================
+// LOGIN GOOGLE
+// ============================================================
+
 function entrarComGoogle() {
+  if (!firebasePronto) {
+    alert(
+      "O Firebase ainda não está pronto."
+    );
+    return Promise.reject(
+      new Error("Firebase não inicializado.")
+    );
+  }
+
   var provedor =
     new firebase.auth.GoogleAuthProvider();
 
@@ -203,11 +260,18 @@ function entrarComGoogle() {
       navigator.userAgent
     );
 
-  var tentativa = noCelular
-    ? firebase.auth().signInWithRedirect(provedor)
-    : firebase.auth().signInWithPopup(provedor);
+  var tentativa;
+
+  if (noCelular) {
+    tentativa =
+      firebase.auth().signInWithRedirect(provedor);
+  } else {
+    tentativa =
+      firebase.auth().signInWithPopup(provedor);
+  }
 
   return tentativa.catch(function (erro) {
+
     console.error(
       "Erro no login com Google:",
       erro
@@ -218,7 +282,7 @@ function entrarComGoogle() {
       (
         erro.code === "auth/popup-blocked" ||
         erro.code ===
-          "auth/operation-not-supported-in-this-environment"
+        "auth/operation-not-supported-in-this-environment"
       )
     ) {
       return firebase.auth()
@@ -228,21 +292,22 @@ function entrarComGoogle() {
     if (
       erro &&
       erro.code !==
-        "auth/popup-closed-by-user" &&
+      "auth/popup-closed-by-user" &&
       erro.code !==
-        "auth/cancelled-popup-request"
+      "auth/cancelled-popup-request"
     ) {
       alert(mensagemDeErro(erro));
     }
+
+    return null;
   });
 }
 
 function aoClicarBotaoGoogle() {
   if (!firebasePronto) {
     alert(
-      "Login indisponivel: configure o FIREBASE_CONFIG no script.js."
+      "Login indisponível: o Firebase não foi inicializado."
     );
-
     return;
   }
 
@@ -250,10 +315,14 @@ function aoClicarBotaoGoogle() {
     firebase.auth().currentUser;
 
   if (usuario) {
+
     firebase.auth()
       .signOut()
-      .then(entrarComGoogle)
+      .then(function () {
+        return entrarComGoogle();
+      })
       .catch(function (erro) {
+
         console.error(
           "Erro ao trocar de conta:",
           erro
@@ -263,10 +332,16 @@ function aoClicarBotaoGoogle() {
           mensagemDeErro(erro)
         );
       });
+
   } else {
     entrarComGoogle();
   }
 }
+
+
+// ============================================================
+// MOSTRAR USUÁRIO
+// ============================================================
 
 function mostrarUsuario(usuario) {
   var botao =
@@ -279,34 +354,53 @@ function mostrarUsuario(usuario) {
     document.getElementById("btn-sair");
 
   if (usuario) {
+
     var nome =
       usuario.displayName ||
       usuario.email ||
-      "Usuario";
+      "Usuário";
 
-    info.textContent =
-      "Olá, " + nome;
+    if (info) {
+      info.textContent =
+        "Olá, " + nome;
 
-    info.hidden = false;
+      info.hidden = false;
+    }
 
-    botao.textContent =
-      "Trocar conta";
+    if (botao) {
+      botao.textContent =
+        "Trocar conta";
+    }
 
-    btnSair.hidden = false;
+    if (btnSair) {
+      btnSair.hidden = false;
+    }
+
   } else {
-    info.textContent = "";
-    info.hidden = true;
 
-    botao.textContent =
-      "Entrar com Google";
+    if (info) {
+      info.textContent = "";
+      info.hidden = true;
+    }
 
-    btnSair.hidden = true;
+    if (botao) {
+      botao.textContent =
+        "Entrar com Google";
+    }
+
+    if (btnSair) {
+      btnSair.hidden = true;
+    }
   }
 
   configurarSessao(usuario);
 }
 
-// ---------- Sessão ----------
+
+// ============================================================
+// ADMINISTRADOR
+// ============================================================
+
 var ADMIN_EMAILS = [
   "efa.eduacation.for.all@gmail.com"
 ];
@@ -320,14 +414,24 @@ var ETIQUETAS = {
 };
 
 function ehAdministrador(usuario) {
-  return !!(
-    usuario &&
-    usuario.email &&
+  if (
+    !usuario ||
+    !usuario.email
+  ) {
+    return false;
+  }
+
+  return (
     ADMIN_EMAILS.indexOf(
       usuario.email.toLowerCase()
     ) !== -1
   );
 }
+
+
+// ============================================================
+// UTILITÁRIOS
+// ============================================================
 
 function normalizar(texto) {
   return (texto || "")
@@ -377,15 +481,14 @@ function paraAula(doc) {
     documento: dados.documento || "",
     autorId: dados.autorId || "",
     autorNome: dados.autorNome || "",
-    status:
-      dados.status || "pendente",
-    criadoEm:
-      dados.criadoEm || null
+    status: dados.status || "pendente",
+    criadoEm: dados.criadoEm || null
   };
 }
 
 function ordenarPorData(aulas) {
   aulas.sort(function (a, b) {
+
     var ta =
       a.criadoEm &&
       a.criadoEm.toMillis
@@ -405,16 +508,31 @@ function ordenarPorData(aulas) {
 }
 
 function encerrarOuvintesUsuario() {
-  while (ouvintesUsuario.length) {
+  while (
+    ouvintesUsuario.length
+  ) {
     try {
       ouvintesUsuario.pop()();
-    } catch (erro) {}
+    } catch (erro) {
+      console.warn(
+        "Erro ao encerrar listener:",
+        erro
+      );
+    }
   }
-  }
+}
+
+
+// ============================================================
+// SESSÃO DO USUÁRIO
+// ============================================================
+
 function configurarSessao(usuario) {
+
   encerrarOuvintesUsuario();
 
   usuarioAtual = usuario;
+
   saldoMoedas = 0;
   premiumAtivo = false;
   idsDesbloqueadas = {};
@@ -425,10 +543,14 @@ function configurarSessao(usuario) {
   var logado = !!usuario;
 
   var areaUsuario =
-    document.getElementById("area-usuario");
+    document.getElementById(
+      "area-usuario"
+    );
 
   var linkCriar =
-    document.getElementById("link-criar");
+    document.getElementById(
+      "link-criar"
+    );
 
   if (areaUsuario) {
     areaUsuario.hidden = !logado;
@@ -442,10 +564,14 @@ function configurarSessao(usuario) {
     ehAdministrador(usuario);
 
   var painel =
-    document.getElementById("painel-admin");
+    document.getElementById(
+      "painel-admin"
+    );
 
   var linkPainel =
-    document.getElementById("link-painel");
+    document.getElementById(
+      "link-painel"
+    );
 
   if (painel) {
     painel.hidden = !admin;
@@ -461,7 +587,8 @@ function configurarSessao(usuario) {
   if (
     !logado ||
     !firebasePronto ||
-    typeof firebase.firestore !== "function"
+    typeof firebase.firestore !==
+    "function"
   ) {
     return;
   }
@@ -469,15 +596,22 @@ function configurarSessao(usuario) {
   var banco =
     firebase.firestore();
 
+
+  // ----------------------------------------------------------
+  // PERFIL
+  // ----------------------------------------------------------
+
   var refUsuario =
     banco
       .collection("usuarios")
       .doc(usuario.uid);
 
-  ouvintesUsuario.push(
+  var listenerPerfil =
     refUsuario.onSnapshot(
       function (doc) {
+
         if (!doc.exists) {
+
           refUsuario.set({
             nome:
               usuario.displayName ||
@@ -496,9 +630,11 @@ function configurarSessao(usuario) {
               firebase.firestore
                 .FieldValue
                 .serverTimestamp()
+
           }).catch(function (erro) {
+
             console.error(
-              "Erro ao criar perfil do usuario:",
+              "Erro ao criar perfil:",
               erro
             );
           });
@@ -510,30 +646,40 @@ function configurarSessao(usuario) {
           doc.data();
 
         saldoMoedas =
-          dados.moedas || 0;
+          Number(dados.moedas || 0);
 
         premiumAtivo =
           !!(
             dados.premium &&
             dados.premiumAte &&
             dados.premiumAte.toMillis &&
-            dados.premiumAte.toMillis() >
-              Date.now()
+            dados.premiumAte.toMillis()
+              > Date.now()
           );
 
         atualizarPainelUsuario();
         renderizarAulas();
+
       },
       function (erro) {
+
         console.error(
           "Erro ao carregar perfil:",
           erro
         );
       }
-    )
-  );
+    );
 
   ouvintesUsuario.push(
+    listenerPerfil
+  );
+
+
+  // ----------------------------------------------------------
+  // MINHAS AULAS
+  // ----------------------------------------------------------
+
+  var listenerMinhasAulas =
     banco
       .collection("aulas")
       .where(
@@ -543,6 +689,7 @@ function configurarSessao(usuario) {
       )
       .onSnapshot(
         function (instantaneo) {
+
           MINHAS_AULAS =
             ordenarPorData(
               instantaneo.docs.map(
@@ -553,15 +700,24 @@ function configurarSessao(usuario) {
           renderizarMinhasAulas();
         },
         function (erro) {
+
           console.error(
             "Erro ao carregar suas aulas:",
             erro
           );
         }
-      )
-  );
+      );
 
   ouvintesUsuario.push(
+    listenerMinhasAulas
+  );
+
+
+  // ----------------------------------------------------------
+  // TRANSAÇÕES
+  // ----------------------------------------------------------
+
+  var listenerTransacoes =
     banco
       .collection("transacoes")
       .where(
@@ -571,10 +727,12 @@ function configurarSessao(usuario) {
       )
       .onSnapshot(
         function (instantaneo) {
+
           TRANSACOES =
             ordenarPorData(
               instantaneo.docs.map(
                 function (doc) {
+
                   var dados =
                     doc.data();
 
@@ -602,17 +760,28 @@ function configurarSessao(usuario) {
           renderizarTransacoes();
         },
         function (erro) {
+
           console.error(
-            "Erro ao carregar transacoes:",
+            "Erro ao carregar transações:",
             erro
           );
         }
-      )
-  );
+      );
 
   ouvintesUsuario.push(
+    listenerTransacoes
+  );
+
+
+  // ----------------------------------------------------------
+  // AULAS DESBLOQUEADAS
+  // ----------------------------------------------------------
+
+  var listenerDesbloqueadas =
     banco
-      .collection("aulasDesbloqueadas")
+      .collection(
+        "aulasDesbloqueadas"
+      )
       .where(
         "usuarioId",
         "==",
@@ -620,33 +789,56 @@ function configurarSessao(usuario) {
       )
       .onSnapshot(
         function (instantaneo) {
+
           idsDesbloqueadas = {};
 
           instantaneo.forEach(
             function (doc) {
-              idsDesbloqueadas[
-                doc.data().aulaId
-              ] = true;
+
+              var dados =
+                doc.data();
+
+              if (dados.aulaId) {
+                idsDesbloqueadas[
+                  dados.aulaId
+                ] = true;
+              }
             }
           );
 
           renderizarAulas();
         },
         function (erro) {
+
           console.error(
             "Erro ao carregar aulas desbloqueadas:",
             erro
           );
         }
-      )
+      );
+
+  ouvintesUsuario.push(
+    listenerDesbloqueadas
   );
 
+
+  // ----------------------------------------------------------
+  // ADMINISTRADOR
+  // ----------------------------------------------------------
+
   if (admin) {
-    ouvintesUsuario.push(
+
+    var listenerAdmin =
       banco
         .collection("aulas")
         .onSnapshot(
           function (instantaneo) {
+
+            console.log(
+              "Aulas encontradas pelo administrador:",
+              instantaneo.size
+            );
+
             TODAS_AULAS =
               ordenarPorData(
                 instantaneo.docs.map(
@@ -658,31 +850,79 @@ function configurarSessao(usuario) {
             renderizarListaAdmin();
           },
           function (erro) {
+
             console.error(
-              "Erro ao carregar aulas (admin):",
+              "ERRO AO CARREGAR AULAS DO ADMIN:",
               erro
             );
+
+            var lista =
+              document.getElementById(
+                "lista-pendentes"
+              );
+
+            var aviso =
+              document.getElementById(
+                "pendentes-vazio"
+              );
+
+            if (lista) {
+
+              lista.innerHTML = "";
+
+              var item =
+                document.createElement(
+                  "li"
+                );
+
+              item.className =
+                "item-admin";
+
+              item.textContent =
+                "Erro ao carregar as aulas pendentes. Verifique as regras do Firestore e a conta administradora.";
+
+              lista.appendChild(
+                item
+              );
+            }
+
+            if (aviso) {
+              aviso.hidden = true;
+            }
           }
-        )
+        );
+
+    ouvintesUsuario.push(
+      listenerAdmin
     );
   }
 }
 
-// ---------- Catálogo ----------
+
+// ============================================================
+// CATÁLOGO
+// ============================================================
+
 function carregarCatalogo() {
+
   if (
     !firebasePronto ||
-    typeof firebase.firestore !== "function"
+    typeof firebase.firestore !==
+    "function"
   ) {
+
     AULAS =
       AULAS_INICIAIS.map(
         function (aula) {
+
           aula.semBloqueio = true;
+
           return aula;
         }
       );
 
     renderizarAulas();
+
     return;
   }
 
@@ -695,6 +935,7 @@ function carregarCatalogo() {
     )
     .onSnapshot(
       function (instantaneo) {
+
         AULAS =
           ordenarPorData(
             instantaneo.docs.map(
@@ -705,16 +946,20 @@ function carregarCatalogo() {
         renderizarAulas();
       },
       function (erro) {
+
         console.error(
-          "Erro ao carregar o catalogo:",
+          "Erro ao carregar catálogo:",
           erro
         );
 
         if (!AULAS.length) {
+
           AULAS =
             AULAS_INICIAIS.map(
               function (aula) {
+
                 aula.semBloqueio = true;
+
                 return aula;
               }
             );
@@ -725,7 +970,13 @@ function carregarCatalogo() {
     );
 }
 
+
+// ============================================================
+// ACESSO À AULA
+// ============================================================
+
 function aulaAcessivel(aula) {
+
   if (aula.semBloqueio) {
     return true;
   }
@@ -737,8 +988,11 @@ function aulaAcessivel(aula) {
 }
 
 function criarBotaoDesbloquear(aula) {
+
   var botao =
-    document.createElement("button");
+    document.createElement(
+      "button"
+    );
 
   botao.type = "button";
 
@@ -751,8 +1005,8 @@ function criarBotaoDesbloquear(aula) {
   botao.setAttribute(
     "aria-label",
     "Desbloquear aula " +
-      aula.titulo +
-      " por 1 EFA Coin"
+    aula.titulo +
+    " por 1 EFA Coin"
   );
 
   botao.addEventListener(
@@ -765,21 +1019,33 @@ function criarBotaoDesbloquear(aula) {
   return botao;
 }
 
+
+// ============================================================
+// CARD DA AULA
+// ============================================================
+
 function criarCard(aula) {
+
   var card =
-    document.createElement("article");
+    document.createElement(
+      "article"
+    );
 
   card.className =
     "card-aula";
 
   var titulo =
-    document.createElement("h3");
+    document.createElement(
+      "h3"
+    );
 
   titulo.textContent =
     aula.titulo;
 
   var etiqueta =
-    document.createElement("span");
+    document.createElement(
+      "span"
+    );
 
   etiqueta.className =
     "tag-perfil";
@@ -788,20 +1054,28 @@ function criarCard(aula) {
     aula.etiqueta;
 
   var descricao =
-    document.createElement("p");
+    document.createElement(
+      "p"
+    );
 
   descricao.textContent =
     aula.descricao;
 
   var acoes =
-    document.createElement("div");
+    document.createElement(
+      "div"
+    );
 
   acoes.className =
     "acoes-adicionais";
 
+
   if (aulaAcessivel(aula)) {
+
     var linkVideo =
-      document.createElement("a");
+      document.createElement(
+        "a"
+      );
 
     linkVideo.className =
       "btn-acesso";
@@ -818,8 +1092,11 @@ function criarCard(aula) {
     linkVideo.textContent =
       "🎥 Assistir aula";
 
+
     var linkDoc =
-      document.createElement("a");
+      document.createElement(
+        "a"
+      );
 
     linkDoc.className =
       "btn-acesso desbloquear";
@@ -836,6 +1113,7 @@ function criarCard(aula) {
     linkDoc.textContent =
       "📄 Material adaptado";
 
+
     acoes.appendChild(
       linkVideo
     );
@@ -843,11 +1121,16 @@ function criarCard(aula) {
     acoes.appendChild(
       linkDoc
     );
+
   } else {
+
     acoes.appendChild(
-      criarBotaoDesbloquear(aula)
+      criarBotaoDesbloquear(
+        aula
+      )
     );
   }
+
 
   card.appendChild(titulo);
   card.appendChild(etiqueta);
@@ -857,7 +1140,13 @@ function criarCard(aula) {
   return card;
 }
 
+
+// ============================================================
+// RENDERIZAR CATÁLOGO
+// ============================================================
+
 function renderizarAulas() {
+
   var campoBusca =
     document.getElementById(
       "campo-busca"
@@ -878,13 +1167,17 @@ function renderizarAulas() {
       "sem-resultados"
     );
 
-  if (!campoBusca || !filtroPerfil || !grid) {
+  if (
+    !grid ||
+    !campoBusca ||
+    !filtroPerfil
+  ) {
     return;
   }
 
   var termo =
     normalizar(
-      (campoBusca.value || "").trim()
+      campoBusca.value.trim()
     );
 
   var perfil =
@@ -895,10 +1188,15 @@ function renderizarAulas() {
   var visiveis =
     AULAS.filter(
       function (aula) {
+
         var texto =
-          normalizar(aula.titulo) +
+          normalizar(
+            aula.titulo
+          ) +
           " " +
-          normalizar(aula.descricao);
+          normalizar(
+            aula.descricao
+          );
 
         var encontrouTexto =
           !termo ||
@@ -917,6 +1215,7 @@ function renderizarAulas() {
 
   visiveis.forEach(
     function (aula) {
+
       grid.appendChild(
         criarCard(aula)
       );
@@ -929,9 +1228,15 @@ function renderizarAulas() {
   }
 }
 
-// ---------- Desbloqueio ----------
+
+// ============================================================
+// DESBLOQUEAR AULA
+// ============================================================
+
 function desbloquearAula(aula) {
+
   if (!usuarioAtual) {
+
     alert(
       "Entre com o Google para desbloquear aulas."
     );
@@ -947,6 +1252,7 @@ function desbloquearAula(aula) {
   }
 
   if (saldoMoedas < 1) {
+
     alert(
       "Você precisa de 1 EFA Coin para desbloquear esta aula. Envie uma aula e, quando ela for aprovada, você recebe 🪙 1 Coin."
     );
@@ -960,6 +1266,7 @@ function desbloquearAula(aula) {
   var lote =
     banco.batch();
 
+
   lote.update(
     banco
       .collection("usuarios")
@@ -971,6 +1278,7 @@ function desbloquearAula(aula) {
           .increment(-1)
     }
   );
+
 
   lote.set(
     banco
@@ -998,9 +1306,12 @@ function desbloquearAula(aula) {
     }
   );
 
+
   lote.set(
     banco
-      .collection("aulasDesbloqueadas")
+      .collection(
+        "aulasDesbloqueadas"
+      )
       .doc(),
     {
       usuarioId:
@@ -1016,33 +1327,51 @@ function desbloquearAula(aula) {
     }
   );
 
+
   lote.commit()
     .then(function () {
+
       alert(
         "✅ Aula desbloqueada! Bom estudo."
       );
     })
     .catch(function (erro) {
+
       console.error(
         "Erro ao desbloquear aula:",
         erro
       );
 
-      alert(
+      if (
         erro &&
         erro.code ===
-          "permission-denied"
-          ? "Permissão negada: confira as regras do Firestore."
-          : "Não foi possível desbloquear a aula. Tente novamente."
-      );
+        "permission-denied"
+      ) {
+
+        alert(
+          "Permissão negada pelo Firestore. Confira as regras do Firestore."
+        );
+
+      } else {
+
+        alert(
+          "Não foi possível desbloquear a aula. Tente novamente."
+        );
+      }
     });
 }
 
-// ---------- Criar aula ----------
+
+// ============================================================
+// ENVIAR AULA PARA ANÁLISE
+// ============================================================
+
 function enviarAulaAnalise(evento) {
+
   evento.preventDefault();
 
   if (!usuarioAtual) {
+
     alert(
       "Entre com o Google para enviar aulas."
     );
@@ -1050,32 +1379,99 @@ function enviarAulaAnalise(evento) {
     return;
   }
 
+  if (
+    !firebasePronto ||
+    typeof firebase.firestore !==
+    "function"
+  ) {
+
+    alert(
+      "O Firebase não está disponível."
+    );
+
+    return;
+  }
+
+
+  var titulo =
+    document.getElementById(
+      "campo-criar-titulo"
+    );
+
+  var descricao =
+    document.getElementById(
+      "campo-criar-descricao"
+    );
+
+  var perfil =
+    document.getElementById(
+      "campo-criar-perfil"
+    );
+
+  var youtube =
+    document.getElementById(
+      "campo-criar-youtube"
+    );
+
+  var documento =
+    document.getElementById(
+      "campo-criar-documento"
+    );
+
+
+  if (
+    !titulo ||
+    !descricao ||
+    !perfil ||
+    !youtube ||
+    !documento
+  ) {
+
+    alert(
+      "Não foi possível localizar os campos do formulário."
+    );
+
+    return;
+  }
+
+
   var dados = {
+
     titulo:
-      document.getElementById(
-        "campo-criar-titulo"
-      ).value.trim(),
+      titulo.value.trim(),
 
     descricao:
-      document.getElementById(
-        "campo-criar-descricao"
-      ).value.trim(),
+      descricao.value.trim(),
 
     perfil:
-      document.getElementById(
-        "campo-criar-perfil"
-      ).value,
+      perfil.value,
 
     youtube:
-      document.getElementById(
-        "campo-criar-youtube"
-      ).value.trim(),
+      youtube.value.trim(),
 
     documento:
-      document.getElementById(
-        "campo-criar-documento"
-      ).value.trim()
+      documento.value.trim(),
+
+    etiqueta:
+      ETIQUETAS[perfil.value] ||
+      "Neurotípico",
+
+    autorId:
+      usuarioAtual.uid,
+
+    autorNome:
+      usuarioAtual.displayName ||
+      usuarioAtual.email,
+
+    status:
+      "pendente",
+
+    criadoEm:
+      firebase.firestore
+        .FieldValue
+        .serverTimestamp()
   };
+
 
   if (
     !dados.titulo ||
@@ -1083,319 +1479,635 @@ function enviarAulaAnalise(evento) {
     !dados.youtube ||
     !dados.documento
   ) {
+
+    alert(
+      "Preencha todos os campos da aula."
+    );
+
     return;
   }
 
-  dados.etiqueta =
-    ETIQUETAS[dados.perfil] ||
-    "Neurotípico";
 
-  dados.autorId =
-    usuarioAtual.uid;
+  var botaoEnviar =
+    evento.submitter;
 
-  dados.autorNome =
-    usuarioAtual.displayName ||
-    usuarioAtual.email;
+  if (botaoEnviar) {
+    botaoEnviar.disabled = true;
+  }
 
-  dados.status =
-    "pendente";
-
-  dados.criadoEm =
-    firebase.firestore
-      .FieldValue
-      .serverTimestamp();
 
   firebase.firestore()
     .collection("aulas")
     .add(dados)
     .then(function () {
-      document.getElementById(
-        "feedback-criar"
-      ).textContent =
-        "✅ Aula enviada para análise! Você receberá 🪙 1 EFA Coin quando ela for aprovada.";
 
-      document.getElementById(
-        "form-criar-aula"
-      ).reset();
+      var feedback =
+        document.getElementById(
+          "feedback-criar"
+        );
+
+      if (feedback) {
+
+        feedback.textContent =
+          "✅ Aula enviada para análise! Você receberá 🪙 1 EFA Coin quando ela for aprovada.";
+      }
+
+      var formulario =
+        document.getElementById(
+          "form-criar-aula"
+        );
+
+      if (formulario) {
+        formulario.reset();
+      }
+
     })
     .catch(function (erro) {
+
       console.error(
         "Erro ao enviar aula:",
         erro
       );
 
-      alert(
-        "Não foi possível enviar a aula. Tente novamente."
-      );
+      if (
+        erro &&
+        erro.code ===
+        "permission-denied"
+      ) {
+
+        alert(
+          "Permissão negada pelo Firestore. Confira as regras de segurança."
+        );
+
+      } else if (
+        erro &&
+        erro.message
+      ) {
+
+        alert(
+          "Não foi possível enviar a aula.\n\nDetalhe: " +
+          erro.message
+        );
+
+      } else {
+
+        alert(
+          "Não foi possível enviar a aula. Tente novamente."
+        );
+      }
+
+    })
+    .finally(function () {
+
+      if (botaoEnviar) {
+        botaoEnviar.disabled = false;
+      }
     });
-    }// ---------- Área do usuário ----------
-
-function atualizarPainelUsuario() {
-  var moedas =
-    document.getElementById("saldo-moedas");
-
-  if (moedas) {
-    moedas.textContent =
-      saldoMoedas + " 🪙 EFA Coins";
-  }
-
-  var premium =
-    document.getElementById("status-premium");
-
-  if (premium) {
-    premium.textContent =
-      premiumAtivo
-        ? "⭐ Premium ativo"
-        : "Premium não ativo";
-  }
 }
 
-function renderizarMinhasAulas() {
-  var lista =
-    document.getElementById(
-      "lista-minhas-aulas"
+
+// ============================================================
+// STATUS
+// ============================================================
+
+function criarBadgeStatus(status) {
+
+  var badge =
+    document.createElement(
+      "span"
     );
 
-  if (!lista) return;
+  var texto =
+    status === "aprovada"
+      ? "✅ Aprovada"
+      : status === "recusada"
+        ? "❌ Recusada"
+        : "⏳ Pendente";
+
+  badge.className =
+    "status-badge " +
+    status;
+
+  badge.textContent =
+    texto;
+
+  return badge;
+}
+
+
+// ============================================================
+// MINHAS AULAS
+// ============================================================
+
+function renderizarMinhasAulas() {
+
+  var lista =
+    document.getElementById(
+      "lista-minhas"
+    );
+
+  var aviso =
+    document.getElementById(
+      "minhas-vazio"
+    );
+
+  if (!lista) {
+    return;
+  }
 
   lista.innerHTML = "";
 
-  if (!usuarioAtual) {
-    return;
-  }
-
-  if (!MINHAS_AULAS.length) {
-    var vazio =
-      document.createElement("p");
-
-    vazio.textContent =
-      "Você ainda não enviou nenhuma aula.";
-
-    lista.appendChild(vazio);
-
-    return;
-  }
-
   MINHAS_AULAS.forEach(
     function (aula) {
+
       var item =
-        document.createElement("article");
+        document.createElement(
+          "li"
+        );
 
       item.className =
-        "item-minha-aula";
+        "item-admin";
+
+
+      var cabecalho =
+        document.createElement(
+          "div"
+        );
+
+      cabecalho.className =
+        "item-admin-cabecalho";
+
 
       var titulo =
-        document.createElement("h3");
+        document.createElement(
+          "strong"
+        );
 
       titulo.textContent =
         aula.titulo;
 
-      var status =
-        document.createElement("span");
 
-      status.className =
-        "status-aula " +
-        aula.status;
+      var etiqueta =
+        document.createElement(
+          "span"
+        );
 
-      if (aula.status === "aprovada") {
-        status.textContent =
-          "✅ Aprovada";
-      } else if (
-        aula.status === "recusada"
-      ) {
-        status.textContent =
-          "❌ Recusada";
-      } else {
-        status.textContent =
-          "⏳ Em análise";
-      }
+      etiqueta.className =
+        "tag-perfil";
 
-      item.appendChild(titulo);
-      item.appendChild(status);
+      etiqueta.textContent =
+        aula.etiqueta;
 
-      lista.appendChild(item);
+
+      cabecalho.appendChild(
+        titulo
+      );
+
+      cabecalho.appendChild(
+        etiqueta
+      );
+
+      cabecalho.appendChild(
+        criarBadgeStatus(
+          aula.status
+        )
+      );
+
+
+      item.appendChild(
+        cabecalho
+      );
+
+      lista.appendChild(
+        item
+      );
     }
   );
+
+  if (aviso) {
+    aviso.hidden =
+      MINHAS_AULAS.length !== 0;
+  }
 }
 
+
+// ============================================================
+// TRANSAÇÕES
+// ============================================================
+
 function renderizarTransacoes() {
+
   var lista =
     document.getElementById(
       "lista-transacoes"
     );
 
-  if (!lista) return;
+  var aviso =
+    document.getElementById(
+      "transacoes-vazio"
+    );
 
-  lista.innerHTML = "";
-
-  if (!TRANSACOES.length) {
-    var vazio =
-      document.createElement("p");
-
-    vazio.textContent =
-      "Nenhuma movimentação de Coins ainda.";
-
-    lista.appendChild(vazio);
-
+  if (!lista) {
     return;
   }
 
+  lista.innerHTML = "";
+
   TRANSACOES.forEach(
     function (transacao) {
+
       var item =
-        document.createElement("li");
+        document.createElement(
+          "li"
+        );
+
+      item.className =
+        "item-transacao";
 
       var sinal =
-        transacao.tipo === "gasto"
-          ? "-"
-          : "+";
+        transacao.tipo === "ganho"
+          ? "+"
+          : "-";
 
       item.textContent =
+        "🪙 " +
         sinal +
         transacao.quantidade +
-        " 🪙 " +
-        (transacao.motivo || "");
+        " · " +
+        transacao.motivo +
+        " · " +
+        formatarData(
+          transacao.criadoEm
+        );
 
-      lista.appendChild(item);
+      lista.appendChild(
+        item
+      );
     }
   );
+
+  if (aviso) {
+    aviso.hidden =
+      TRANSACOES.length !== 0;
+  }
 }
 
-// ---------- Administração ----------
 
-function renderizarPendentes() {
-  var lista =
+// ============================================================
+// PAINEL DO USUÁRIO
+// ============================================================
+
+function atualizarPainelUsuario() {
+
+  var badge =
     document.getElementById(
-      "lista-aulas-pendentes"
+      "badge-moedas"
     );
 
-  if (!lista) return;
+  var saldo =
+    document.getElementById(
+      "saldo-usuario"
+    );
+
+  var statusPremium =
+    document.getElementById(
+      "status-premium"
+    );
+
+
+  if (badge) {
+
+    badge.textContent =
+      "🪙 " +
+      saldoMoedas;
+
+    badge.hidden =
+      !usuarioAtual;
+  }
+
+
+  if (saldo) {
+
+    saldo.textContent =
+      "Seu saldo: 🪙 " +
+      saldoMoedas +
+      " EFA Coin" +
+      (
+        saldoMoedas === 1
+          ? ""
+          : "s"
+      );
+  }
+
+
+  if (statusPremium) {
+
+    statusPremium.textContent =
+      premiumAtivo
+        ? "⭐ Premium ativo. Todas as aulas liberadas, sem gastar Coins."
+        : "Plano gratuito: desbloqueie aulas com 🪙 1 Coin cada.";
+  }
+}
+
+
+// ============================================================
+// PAINEL ADMINISTRATIVO
+// ============================================================
+
+function renderizarPendentes() {
+
+  var lista =
+    document.getElementById(
+      "lista-pendentes"
+    );
+
+  var aviso =
+    document.getElementById(
+      "pendentes-vazio"
+    );
+
+  if (!lista) {
+    return;
+  }
 
   lista.innerHTML = "";
 
   var pendentes =
     TODAS_AULAS.filter(
       function (aula) {
-        return aula.status === "pendente";
+        return aula.status ===
+          "pendente";
       }
     );
 
-  if (!pendentes.length) {
-    var vazio =
-      document.createElement("p");
-
-    vazio.textContent =
-      "Nenhuma aula aguardando análise.";
-
-    lista.appendChild(vazio);
-
-    return;
-  }
 
   pendentes.forEach(
     function (aula) {
+
       var item =
-        document.createElement("article");
+        document.createElement(
+          "li"
+        );
 
       item.className =
-        "item-pendente";
+        "item-admin";
+
+
+      var cabecalho =
+        document.createElement(
+          "div"
+        );
+
+      cabecalho.className =
+        "item-admin-cabecalho";
+
 
       var titulo =
-        document.createElement("h3");
+        document.createElement(
+          "strong"
+        );
 
       titulo.textContent =
         aula.titulo;
 
+
+      var etiqueta =
+        document.createElement(
+          "span"
+        );
+
+      etiqueta.className =
+        "tag-perfil";
+
+      etiqueta.textContent =
+        aula.etiqueta;
+
+
+      cabecalho.appendChild(
+        titulo
+      );
+
+      cabecalho.appendChild(
+        etiqueta
+      );
+
+      cabecalho.appendChild(
+        criarBadgeStatus(
+          aula.status
+        )
+      );
+
+
+      item.appendChild(
+        cabecalho
+      );
+
+
+      var autor =
+        document.createElement(
+          "p"
+        );
+
+      autor.className =
+        "item-meta";
+
+      autor.textContent =
+        "👤 Autor: " +
+        (
+          aula.autorNome ||
+          "desconhecido"
+        ) +
+        " · 📅 Enviada em: " +
+        formatarData(
+          aula.criadoEm
+        );
+
+      item.appendChild(
+        autor
+      );
+
+
       var descricao =
-        document.createElement("p");
+        document.createElement(
+          "p"
+        );
 
       descricao.textContent =
         aula.descricao;
 
-      var autor =
-        document.createElement("p");
+      item.appendChild(
+        descricao
+      );
 
-      autor.textContent =
-        "Autor: " +
-        (aula.autorNome || "Não informado");
 
-      var botoes =
-        document.createElement("div");
+      var links =
+        document.createElement(
+          "p"
+        );
 
-      botoes.className =
-        "acoes-admin";
+      links.className =
+        "item-meta";
 
-      var aprovar =
-        document.createElement("button");
 
-      aprovar.type = "button";
+      var linkVideo =
+        document.createElement(
+          "a"
+        );
 
-      aprovar.textContent =
+      linkVideo.className =
+        "link-acao";
+
+      linkVideo.href =
+        aula.youtube;
+
+      linkVideo.target =
+        "_blank";
+
+      linkVideo.rel =
+        "noopener noreferrer";
+
+      linkVideo.textContent =
+        "🎥 Ver vídeo";
+
+
+      var linkDoc =
+        document.createElement(
+          "a"
+        );
+
+      linkDoc.className =
+        "link-acao";
+
+      linkDoc.href =
+        aula.documento;
+
+      linkDoc.target =
+        "_blank";
+
+      linkDoc.rel =
+        "noopener noreferrer";
+
+      linkDoc.textContent =
+        "📄 Ver material";
+
+
+      links.appendChild(
+        linkVideo
+      );
+
+      links.appendChild(
+        document.createTextNode(
+          " · "
+        )
+      );
+
+      links.appendChild(
+        linkDoc
+      );
+
+      item.appendChild(
+        links
+      );
+
+
+      var acoes =
+        document.createElement(
+          "div"
+        );
+
+      acoes.className =
+        "item-admin-acoes";
+
+
+      var btnAprovar =
+        document.createElement(
+          "button"
+        );
+
+      btnAprovar.type =
+        "button";
+
+      btnAprovar.className =
+        "btn-mini aprovar";
+
+      btnAprovar.textContent =
         "✅ Aprovar";
 
-      aprovar.addEventListener(
+      btnAprovar.setAttribute(
+        "aria-label",
+        "Aprovar aula " +
+        aula.titulo
+      );
+
+      btnAprovar.addEventListener(
         "click",
         function () {
           aprovarAula(aula);
         }
       );
 
-      var recusar =
-        document.createElement("button");
 
-      recusar.type = "button";
+      var btnRecusar =
+        document.createElement(
+          "button"
+        );
 
-      recusar.textContent =
+      btnRecusar.type =
+        "button";
+
+      btnRecusar.className =
+        "btn-mini excluir";
+
+      btnRecusar.textContent =
         "❌ Recusar";
 
-      recusar.addEventListener(
+      btnRecusar.setAttribute(
+        "aria-label",
+        "Recusar aula " +
+        aula.titulo
+      );
+
+      btnRecusar.addEventListener(
         "click",
         function () {
           recusarAula(aula);
         }
       );
 
-      botoes.appendChild(aprovar);
-      botoes.appendChild(recusar);
 
-      item.appendChild(titulo);
-      item.appendChild(descricao);
-      item.appendChild(autor);
-      item.appendChild(botoes);
+      acoes.appendChild(
+        btnAprovar
+      );
 
-      lista.appendChild(item);
+      acoes.appendChild(
+        btnRecusar
+      );
+
+      item.appendChild(
+        acoes
+      );
+
+
+      lista.appendChild(
+        item
+      );
     }
   );
+
+
+  if (aviso) {
+    aviso.hidden =
+      pendentes.length !== 0;
+  }
 }
 
-function renderizarListaAdmin() {
-  var lista =
-    document.getElementById(
-      "lista-todas-aulas"
-    );
 
-  if (!lista) return;
-
-  lista.innerHTML = "";
-
-  TODAS_AULAS.forEach(
-    function (aula) {
-      var item =
-        document.createElement("li");
-
-      item.textContent =
-        aula.titulo +
-        " | " +
-        aula.status;
-
-      lista.appendChild(item);
-    }
-  );
-}
-
-// ---------- Aprovação ----------
+// ============================================================
+// APROVAR AULA
+// ============================================================
 
 function aprovarAula(aula) {
+
   if (
     !confirm(
       'Aprovar a aula "' +
@@ -1406,11 +2118,13 @@ function aprovarAula(aula) {
     return;
   }
 
+
   var banco =
     firebase.firestore();
 
   var lote =
     banco.batch();
+
 
   lote.update(
     banco
@@ -1421,7 +2135,9 @@ function aprovarAula(aula) {
     }
   );
 
+
   if (aula.autorId) {
+
     lote.update(
       banco
         .collection("usuarios")
@@ -1433,6 +2149,7 @@ function aprovarAula(aula) {
             .increment(1)
       }
     );
+
 
     lote.set(
       banco
@@ -1461,25 +2178,39 @@ function aprovarAula(aula) {
     );
   }
 
+
   lote.commit()
     .then(function () {
+
       alert(
         "✅ Aula aprovada e publicada no catálogo! O autor recebeu 🪙 1 EFA Coin."
       );
     })
     .catch(function (erro) {
+
       console.error(
         "Erro ao aprovar aula:",
         erro
       );
 
       alert(
-        "Não foi possível aprovar a aula. Tente novamente."
+        "Não foi possível aprovar a aula.\n\n" +
+        (
+          erro && erro.message
+            ? erro.message
+            : "Verifique as regras do Firestore."
+        )
       );
     });
 }
 
+
+// ============================================================
+// RECUSAR AULA
+// ============================================================
+
 function recusarAula(aula) {
+
   if (
     !confirm(
       'Recusar a aula "' +
@@ -1490,6 +2221,7 @@ function recusarAula(aula) {
     return;
   }
 
+
   firebase.firestore()
     .collection("aulas")
     .doc(aula.id)
@@ -1497,307 +2229,878 @@ function recusarAula(aula) {
       status: "recusada"
     })
     .then(function () {
+
       alert(
         "❌ Aula recusada."
       );
     })
     .catch(function (erro) {
+
       console.error(
         "Erro ao recusar aula:",
         erro
       );
 
       alert(
-        "Não foi possível recusar a aula. Tente novamente."
+        "Não foi possível recusar a aula.\n\n" +
+        (
+          erro && erro.message
+            ? erro.message
+            : "Verifique as regras do Firestore."
+        )
       );
     });
 }
 
-// ---------- Criar aula pelo administrador ----------
 
-function criarAulaAdmin(evento) {
+// ============================================================
+// EDIÇÃO DE AULA
+// ============================================================
+
+function iniciarEdicao(aula) {
+
+  aulaEmEdicao =
+    aula.id;
+
+
+  var campoTitulo =
+    document.getElementById(
+      "campo-titulo"
+    );
+
+  var campoDescricao =
+    document.getElementById(
+      "campo-descricao"
+    );
+
+  var campoPerfil =
+    document.getElementById(
+      "campo-perfil"
+    );
+
+  var campoYoutube =
+    document.getElementById(
+      "campo-youtube"
+    );
+
+  var campoDocumento =
+    document.getElementById(
+      "campo-documento"
+    );
+
+
+  if (campoTitulo) {
+    campoTitulo.value =
+      aula.titulo;
+  }
+
+  if (campoDescricao) {
+    campoDescricao.value =
+      aula.descricao;
+  }
+
+  if (campoPerfil) {
+    campoPerfil.value =
+      aula.perfil;
+  }
+
+  if (campoYoutube) {
+    campoYoutube.value =
+      aula.youtube;
+  }
+
+  if (campoDocumento) {
+    campoDocumento.value =
+      aula.documento;
+  }
+
+
+  var botaoSalvar =
+    document.getElementById(
+      "btn-salvar-aula"
+    );
+
+  var botaoCancelar =
+    document.getElementById(
+      "btn-cancelar-edicao"
+    );
+
+
+  if (botaoSalvar) {
+    botaoSalvar.textContent =
+      "💾 Salvar alterações";
+  }
+
+  if (botaoCancelar) {
+    botaoCancelar.hidden =
+      false;
+  }
+
+
+  var formulario =
+    document.getElementById(
+      "form-aula"
+    );
+
+  if (formulario) {
+    formulario.scrollIntoView({
+      behavior: "smooth"
+    });
+  }
+}
+
+
+function cancelarEdicao() {
+
+  aulaEmEdicao =
+    null;
+
+
+  var formulario =
+    document.getElementById(
+      "form-aula"
+    );
+
+  var botaoSalvar =
+    document.getElementById(
+      "btn-salvar-aula"
+    );
+
+  var botaoCancelar =
+    document.getElementById(
+      "btn-cancelar-edicao"
+    );
+
+
+  if (formulario) {
+    formulario.reset();
+  }
+
+  if (botaoSalvar) {
+    botaoSalvar.textContent =
+      "➕ Adicionar aula";
+  }
+
+  if (botaoCancelar) {
+    botaoCancelar.hidden =
+      true;
+  }
+}
+
+
+// ============================================================
+// SALVAR AULA DO ADMIN
+// ============================================================
+
+function salvarAula(evento) {
+
   evento.preventDefault();
 
+
+  var campoTitulo =
+    document.getElementById(
+      "campo-titulo"
+    );
+
+  var campoDescricao =
+    document.getElementById(
+      "campo-descricao"
+    );
+
+  var campoPerfil =
+    document.getElementById(
+      "campo-perfil"
+    );
+
+  var campoYoutube =
+    document.getElementById(
+      "campo-youtube"
+    );
+
+  var campoDocumento =
+    document.getElementById(
+      "campo-documento"
+    );
+
+
   if (
-    !usuarioAtual ||
-    !ehAdministrador(usuarioAtual)
+    !campoTitulo ||
+    !campoDescricao ||
+    !campoPerfil ||
+    !campoYoutube ||
+    !campoDocumento
   ) {
+
     alert(
-      "Apenas o administrador pode usar esta função."
+      "Não foi possível localizar os campos da aula."
     );
 
     return;
   }
 
-  var titulo =
-    document.getElementById(
-      "admin-titulo"
-    ).value.trim();
 
-  var descricao =
-    document.getElementById(
-      "admin-descricao"
-    ).value.trim();
+  var dados = {
 
-  var perfil =
-    document.getElementById(
-      "admin-perfil"
-    ).value;
+    titulo:
+      campoTitulo.value.trim(),
 
-  var youtube =
-    document.getElementById(
-      "admin-youtube"
-    ).value.trim();
+    descricao:
+      campoDescricao.value.trim(),
 
-  var documento =
-    document.getElementById(
-      "admin-documento"
-    ).value.trim();
+    perfil:
+      campoPerfil.value,
+
+    youtube:
+      campoYoutube.value.trim(),
+
+    documento:
+      campoDocumento.value.trim(),
+
+    etiqueta:
+      ETIQUETAS[campoPerfil.value] ||
+      "Neurotípico"
+  };
+
 
   if (
-    !titulo ||
-    !descricao ||
-    !youtube ||
-    !documento
+    !dados.titulo ||
+    !dados.descricao ||
+    !dados.youtube ||
+    !dados.documento
   ) {
+
     alert(
-      "Preencha todos os campos."
+      "Preencha todos os campos da aula."
     );
 
     return;
   }
 
-  firebase.firestore()
-    .collection("aulas")
-    .add({
-      titulo: titulo,
-      descricao: descricao,
-      perfil: perfil,
-      etiqueta:
-        ETIQUETAS[perfil] ||
-        "Neurotípico",
-      youtube: youtube,
-      documento: documento,
-      autorId:
-        usuarioAtual.uid,
-      autorNome:
-        usuarioAtual.displayName ||
-        usuarioAtual.email,
-      status: "aprovada",
-      criadoEm:
-        firebase.firestore
-          .FieldValue
-          .serverTimestamp()
-    })
-    .then(function () {
-      alert(
-        "✅ Aula criada e publicada."
-      );
 
-      var formulario =
-        document.getElementById(
-          "form-admin-aula"
+  var banco =
+    firebase.firestore();
+
+  var operacao;
+
+
+  if (aulaEmEdicao) {
+
+    operacao =
+      banco
+        .collection("aulas")
+        .doc(aulaEmEdicao)
+        .set(
+          dados,
+          {
+            merge: true
+          }
         );
 
-      if (formulario) {
-        formulario.reset();
-      }
+  } else {
+
+    var usuario =
+      firebase.auth()
+        .currentUser;
+
+
+    dados.autorId =
+      usuario
+        ? usuario.uid
+        : "";
+
+    dados.autorNome =
+      usuario
+        ? (
+          usuario.displayName ||
+          usuario.email
+        )
+        : "";
+
+    dados.status =
+      "aprovada";
+
+    dados.criadoEm =
+      firebase.firestore
+        .FieldValue
+        .serverTimestamp();
+
+
+    operacao =
+      banco
+        .collection("aulas")
+        .add(dados);
+  }
+
+
+  operacao
+    .then(function () {
+
+      cancelarEdicao();
+
     })
     .catch(function (erro) {
+
       console.error(
-        "Erro ao criar aula:",
+        "Erro ao salvar aula:",
         erro
       );
 
       alert(
-        "Não foi possível criar a aula."
+        "Não foi possível salvar a aula.\n\n" +
+        (
+          erro && erro.message
+            ? erro.message
+            : "Verifique as regras do Firestore."
+        )
       );
     });
 }
 
-// ---------- Filtros ----------
 
-function configurarFiltros() {
-  var busca =
-    document.getElementById(
-      "campo-busca"
-    );
+// ============================================================
+// EXCLUIR AULA
+// ============================================================
 
-  var filtro =
-    document.getElementById(
-      "filtro-perfil"
-    );
+function excluirAula(aula) {
 
-  if (busca) {
-    busca.addEventListener(
-      "input",
-      renderizarAulas
-    );
+  if (
+    !confirm(
+      "Tem certeza que deseja excluir esta aula? (" +
+      aula.titulo +
+      ")"
+    )
+  ) {
+    return;
   }
 
-  if (filtro) {
-    filtro.addEventListener(
-      "change",
-      renderizarAulas
+
+  firebase.firestore()
+    .collection("aulas")
+    .doc(aula.id)
+    .delete()
+    .then(function () {
+
+      console.log(
+        "Aula excluída:",
+        aula.id
+      );
+    })
+    .catch(function (erro) {
+
+      console.error(
+        "Erro ao excluir aula:",
+        erro
+      );
+
+      alert(
+        "Não foi possível excluir a aula.\n\n" +
+        (
+          erro && erro.message
+            ? erro.message
+            : "Verifique as regras do Firestore."
+        )
+      );
+    });
+}
+
+
+// ============================================================
+// LISTA ADMINISTRATIVA
+// ============================================================
+
+function renderizarListaAdmin() {
+
+  var lista =
+    document.getElementById(
+      "lista-admin"
     );
+
+  var aviso =
+    document.getElementById(
+      "admin-vazio"
+    );
+
+  if (!lista) {
+    return;
+  }
+
+
+  lista.innerHTML = "";
+
+
+  var campoBusca =
+    document.getElementById(
+      "busca-admin"
+    );
+
+  var termo =
+    campoBusca
+      ? normalizar(
+        campoBusca.value.trim()
+      )
+      : "";
+
+
+  var visiveis =
+    TODAS_AULAS.filter(
+      function (aula) {
+
+        var texto =
+          normalizar(
+            aula.titulo
+          ) +
+          " " +
+          normalizar(
+            aula.descricao
+          );
+
+        return (
+          !termo ||
+          texto.indexOf(termo) !== -1
+        );
+      }
+    );
+
+
+  visiveis.forEach(
+    function (aula) {
+
+      var item =
+        document.createElement(
+          "li"
+        );
+
+      item.className =
+        "item-admin";
+
+
+      var cabecalho =
+        document.createElement(
+          "div"
+        );
+
+      cabecalho.className =
+        "item-admin-cabecalho";
+
+
+      var titulo =
+        document.createElement(
+          "strong"
+        );
+
+      titulo.textContent =
+        aula.titulo;
+
+
+      var etiqueta =
+        document.createElement(
+          "span"
+        );
+
+      etiqueta.className =
+        "tag-perfil";
+
+      etiqueta.textContent =
+        aula.etiqueta;
+
+
+      cabecalho.appendChild(
+        titulo
+      );
+
+      cabecalho.appendChild(
+        etiqueta
+      );
+
+      cabecalho.appendChild(
+        criarBadgeStatus(
+          aula.status
+        )
+      );
+
+
+      item.appendChild(
+        cabecalho
+      );
+
+
+      var acoes =
+        document.createElement(
+          "div"
+        );
+
+      acoes.className =
+        "item-admin-acoes";
+
+
+      var btnEditar =
+        document.createElement(
+          "button"
+        );
+
+      btnEditar.type =
+        "button";
+
+      btnEditar.className =
+        "btn-mini";
+
+      btnEditar.textContent =
+        "✏️ Editar";
+
+      btnEditar.setAttribute(
+        "aria-label",
+        "Editar aula " +
+        aula.titulo
+      );
+
+      btnEditar.addEventListener(
+        "click",
+        function () {
+          iniciarEdicao(aula);
+        }
+      );
+
+
+      var btnExcluir =
+        document.createElement(
+          "button"
+        );
+
+      btnExcluir.type =
+        "button";
+
+      btnExcluir.className =
+        "btn-mini excluir";
+
+      btnExcluir.textContent =
+        "🗑️ Excluir";
+
+      btnExcluir.setAttribute(
+        "aria-label",
+        "Excluir aula " +
+        aula.titulo
+      );
+
+      btnExcluir.addEventListener(
+        "click",
+        function () {
+          excluirAula(aula);
+        }
+      );
+
+
+      acoes.appendChild(
+        btnEditar
+      );
+
+      acoes.appendChild(
+        btnExcluir
+      );
+
+      item.appendChild(
+        acoes
+      );
+
+      lista.appendChild(
+        item
+      );
+    }
+  );
+
+
+  if (aviso) {
+    aviso.hidden =
+      visiveis.length !== 0;
   }
 }
 
-// ---------- Formulários ----------
 
-function configurarFormularios() {
-  var formulario =
-    document.getElementById(
-      "form-criar-aula"
-    );
-
-  if (formulario) {
-    formulario.addEventListener(
-      "submit",
-      enviarAulaAnalise
-    );
-  }
-
-  var formularioAdmin =
-    document.getElementById(
-      "form-admin-aula"
-    );
-
-  if (formularioAdmin) {
-    formularioAdmin.addEventListener(
-      "submit",
-      criarAulaAdmin
-    );
-  }
-}
-
-// ---------- Botões ----------
-
-function configurarBotoes() {
-  var google =
-    document.getElementById(
-      "btn-google"
-    );
-
-  if (google) {
-    google.addEventListener(
-      "click",
-      aoClicarBotaoGoogle
-    );
-  }
-
-  var sair =
-    document.getElementById(
-      "btn-sair"
-    );
-
-  if (sair) {
-    sair.addEventListener(
-      "click",
-      function () {
-        firebase.auth()
-          .signOut()
-          .catch(function (erro) {
-            console.error(
-              "Erro ao sair:",
-              erro
-            );
-          });
-      }
-    );
-  }
-
-  var aumentar =
-    document.getElementById(
-      "aumentar-fonte"
-    );
-
-  if (aumentar) {
-    aumentar.addEventListener(
-      "click",
-      function () {
-        alterarTamanhoFonte(1);
-      }
-    );
-  }
-
-  var diminuir =
-    document.getElementById(
-      "diminuir-fonte"
-    );
-
-  if (diminuir) {
-    diminuir.addEventListener(
-      "click",
-      function () {
-        alterarTamanhoFonte(-1);
-      }
-    );
-  }
-
-  var tema =
-    document.getElementById(
-      "btn-tema"
-    );
-
-  if (tema) {
-    tema.addEventListener(
-      "click",
-      alternarTema
-    );
-  }
-
-  var dislexia =
-    document.getElementById(
-      "btn-dislexia"
-    );
-
-  if (dislexia) {
-    dislexia.addEventListener(
-      "click",
-      function () {
-        alternarDislexia(dislexia);
-      }
-    );
-  }
-
-  var foco =
-    document.getElementById(
-      "btn-foco"
-    );
-
-  if (foco) {
-    foco.addEventListener(
-      "click",
-      function () {
-        alternarFoco(foco);
-      }
-    );
-  }
-}
-
-// ---------- Inicialização ----------
+// ============================================================
+// INICIALIZAÇÃO
+// ============================================================
 
 document.addEventListener(
   "DOMContentLoaded",
   function () {
+
+    // --------------------------------------------------------
+    // Tema
+    // --------------------------------------------------------
+
     try {
-      var temaSalvo =
+
+      if (
         localStorage.getItem(
           "tema"
-        );
+        ) === "dark"
+      ) {
 
-      if (temaSalvo === "dark") {
         document.documentElement
-          .classList.add("dark");
+          .classList
+          .add("dark");
       }
-    } catch (erro) {}
 
-    configurarBotoes();
-    configurarFiltros();
-    configurarFormularios();
+    } catch (erro) {
 
-    iniciarFirebase();
+      console.warn(
+        "Não foi possível carregar o tema.",
+        erro
+      );
+    }
+
+
+    // --------------------------------------------------------
+    // Acessibilidade
+    // --------------------------------------------------------
+
+    var btnDiminuir =
+      document.getElementById(
+        "btn-diminuir"
+      );
+
+    if (btnDiminuir) {
+      btnDiminuir.addEventListener(
+        "click",
+        function () {
+          alterarTamanhoFonte(-2);
+        }
+      );
+    }
+
+
+    var btnAumentar =
+      document.getElementById(
+        "btn-aumentar"
+      );
+
+    if (btnAumentar) {
+      btnAumentar.addEventListener(
+        "click",
+        function () {
+          alterarTamanhoFonte(2);
+        }
+      );
+    }
+
+
+    var btnDislexia =
+      document.getElementById(
+        "btn-dislexia"
+      );
+
+    if (btnDislexia) {
+      btnDislexia.addEventListener(
+        "click",
+        function () {
+          alternarDislexia(this);
+        }
+      );
+    }
+
+
+    var btnFoco =
+      document.getElementById(
+        "btn-foco"
+      );
+
+    if (btnFoco) {
+      btnFoco.addEventListener(
+        "click",
+        function () {
+          alternarFoco(this);
+        }
+      );
+    }
+
+
+    var btnTema =
+      document.getElementById(
+        "btn-tema"
+      );
+
+    if (btnTema) {
+      btnTema.addEventListener(
+        "click",
+        alternarTema
+      );
+    }
+
+
+    // --------------------------------------------------------
+    // Firebase
+    // --------------------------------------------------------
+
+    if (iniciarFirebase()) {
+
+      firebase.auth()
+        .getRedirectResult()
+        .catch(function (erro) {
+
+          console.error(
+            "Erro no retorno do login:",
+            erro
+          );
+        });
+    }
+
+
+    // --------------------------------------------------------
+    // Login
+    // --------------------------------------------------------
+
+    var btnGoogle =
+      document.getElementById(
+        "btn-google"
+      );
+
+    if (btnGoogle) {
+      btnGoogle.addEventListener(
+        "click",
+        aoClicarBotaoGoogle
+      );
+    }
+
+
+    var btnSair =
+      document.getElementById(
+        "btn-sair"
+      );
+
+    if (btnSair) {
+
+      btnSair.addEventListener(
+        "click",
+        function () {
+
+          if (firebasePronto) {
+
+            firebase.auth()
+              .signOut()
+              .catch(function (erro) {
+
+                console.error(
+                  "Erro ao sair:",
+                  erro
+                );
+              });
+          }
+        }
+      );
+    }
+
+
+    // --------------------------------------------------------
+    // Busca
+    // --------------------------------------------------------
+
+    var campoBusca =
+      document.getElementById(
+        "campo-busca"
+      );
+
+    if (campoBusca) {
+
+      campoBusca.addEventListener(
+        "input",
+        renderizarAulas
+      );
+    }
+
+
+    var filtroPerfil =
+      document.getElementById(
+        "filtro-perfil"
+      );
+
+    if (filtroPerfil) {
+
+      filtroPerfil.addEventListener(
+        "change",
+        renderizarAulas
+      );
+    }
+
+
+    // --------------------------------------------------------
+    // Catálogo
+    // --------------------------------------------------------
+
     carregarCatalogo();
+
+
+    // --------------------------------------------------------
+    // Formulário de criação de aula
+    // --------------------------------------------------------
+
+    var formCriar =
+      document.getElementById(
+        "form-criar-aula"
+      );
+
+    if (formCriar) {
+
+      formCriar.addEventListener(
+        "submit",
+        enviarAulaAnalise
+      );
+    }
+
+
+    // --------------------------------------------------------
+    // Formulário administrativo
+    // --------------------------------------------------------
+
+    var formAula =
+      document.getElementById(
+        "form-aula"
+      );
+
+    if (formAula) {
+
+      formAula.addEventListener(
+        "submit",
+        salvarAula
+      );
+    }
+
+
+    var btnCancelar =
+      document.getElementById(
+        "btn-cancelar-edicao"
+      );
+
+    if (btnCancelar) {
+
+      btnCancelar.addEventListener(
+        "click",
+        cancelarEdicao
+      );
+    }
+
+
+    var buscaAdmin =
+      document.getElementById(
+        "busca-admin"
+      );
+
+    if (buscaAdmin) {
+
+      buscaAdmin.addEventListener(
+        "input",
+        renderizarListaAdmin
+      );
+    }
+
+
+    // --------------------------------------------------------
+    // Renderização inicial
+    // --------------------------------------------------------
+
+    renderizarAulas();
+    renderizarMinhasAulas();
+    renderizarTransacoes();
+    renderizarPendentes();
+    renderizarListaAdmin();
+
   }
 );
