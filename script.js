@@ -148,11 +148,7 @@ function mensagemDeErro(erro) {
   var codigo = erro && erro.code ? erro.code : "";
   var host = window.location.hostname;
   if (codigo === "auth/unauthorized-domain") {
-    return "Este site ainda não está autorizado no Firebase.
-
-Domínio atual: " + host + "
-
-No console do Firebase, abra Authentication > Settings > Authorized domains, clique em Add domain e adicione: " + host + " (somente o domínio, sem caminho). Depois tente entrar novamente.";
+    return "Este site ainda não está autorizado no Firebase.\n\nDomínio atual: " + host + "\n\nNo console do Firebase, abra Authentication > Settings > Authorized domains, clique em Add domain e adicione: " + host + " (somente o domínio, sem caminho). Depois tente entrar novamente.";
   }
   if (codigo === "auth/web-storage-unsupported") {
     return "O navegador está bloqueando os dados de sessão (cookies/armazenamento). Ative os cookies para este site e tente novamente.";
