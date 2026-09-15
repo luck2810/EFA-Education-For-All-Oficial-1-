@@ -392,7 +392,7 @@ main {
 /* Modo foco (comportamento do projeto original) */
 .modo-foco-ativo .banner-introducao,
 .modo-foco-ativo .cabecalho-principal,
-.modo-foco-ativo .tags-perfil,
+.modo-foco-ativo .tag-perfil,
 .modo-foco-ativo .acoes-adicionais {
   display: none !important;
 }
