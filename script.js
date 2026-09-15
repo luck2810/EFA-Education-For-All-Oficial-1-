@@ -755,7 +755,9 @@ function renderizarAulas() {
   var visiveis = AULAS.filter(function (aula) {
     var texto = normalizar(aula.titulo) + " " + normalizar(aula.descricao);
     var encontrouTexto = !termo || texto.indexOf(termo) !== -1;
-    var encontrouDeficiencia = !deficienciaId || aula.deficienciaId === deficienciaId;
+    var deficienciaSelecionada = nomeDaDeficiencia(deficienciaId);
+    var encontrouDeficiencia = !deficienciaId || aula.deficienciaId === deficienciaId ||
+      (!aula.deficienciaId && normalizar(aula.etiqueta || ETIQUETAS[aula.perfil]) === normalizar(deficienciaSelecionada));
     var encontrouMateria = !materiaId || aula.materiaId === materiaId;
     return encontrouTexto && encontrouDeficiencia && encontrouMateria;
   });
