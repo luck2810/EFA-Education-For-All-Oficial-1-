@@ -346,10 +346,22 @@ var DEFICIENCIAS_SUGERIDAS = [
 ];
 
 function ehAdministrador(usuario) {
-  var emailAtual = String(usuario && usuario.email || "").trim().toLowerCase();
+  var emailAtual = obterEmailAutenticado(usuario);
   return emailAtual !== "" && ADMIN_EMAILS.some(function (emailAdmin) {
     return emailAtual === String(emailAdmin).trim().toLowerCase();
   });
+}
+
+function obterEmailAutenticado(usuario) {
+  if (!usuario) return "";
+  var email = String(usuario.email || "").trim().toLowerCase();
+  if (email) return email;
+  var provedores = Array.isArray(usuario.providerData) ? usuario.providerData : [];
+  for (var i = 0; i < provedores.length; i++) {
+    email = String(provedores[i].email || "").trim().toLowerCase();
+    if (email) return email;
+  }
+  return "";
 }
 
 function normalizar(texto) {
@@ -523,9 +535,15 @@ function configurarSessao(usuario) {
   var linkPainel = document.getElementById("link-painel");
   if (painel) {
     painel.hidden = !admin;
-    painel.style.display = admin ? "" : "none";
+    painel.style.display = admin ? "block" : "none";
   }
   if (linkPainel) linkPainel.hidden = !admin;
+
+  console.info("Sessão EFA:", {
+    emailAutenticado: obterEmailAutenticado(usuario) || "não disponível",
+    administradorReconhecido: admin,
+    painelEncontrado: !!painel
+  });
 
   atualizarPainelUsuario();
   renderizarAulas();
