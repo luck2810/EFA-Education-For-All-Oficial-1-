@@ -244,7 +244,16 @@ function mostrarUsuario(usuario) {
     if (botao) botao.textContent = "Entrar com Google";
     if (btnSair) btnSair.hidden = true;
   }
+  atualizarEmailSolicitacaoPremium(usuario);
   configurarSessao(usuario);
+}
+
+function atualizarEmailSolicitacaoPremium(usuario) {
+  var campoEmail = document.getElementById("campo-premium-email");
+  if (!campoEmail) return;
+  campoEmail.value = usuario && usuario.email ? usuario.email : "";
+  campoEmail.disabled = false;
+  campoEmail.readOnly = false;
 }
 
 function configurarPremiumPublico() {
@@ -290,7 +299,7 @@ function configurarPremiumPublico() {
       var campoNome = document.getElementById("campo-premium-nome");
       var campoEmail = document.getElementById("campo-premium-email");
       if (campoNome) campoNome.value = usuarioAtual.displayName || "";
-      if (campoEmail) campoEmail.value = usuarioAtual.email || "";
+      atualizarEmailSolicitacaoPremium(usuarioAtual);
       if (formularioSolicitacao) formularioSolicitacao.hidden = !formularioSolicitacao.hidden;
     });
   }
@@ -337,7 +346,10 @@ var DEFICIENCIAS_SUGERIDAS = [
 ];
 
 function ehAdministrador(usuario) {
-  return !!(usuario && usuario.email && ADMIN_EMAILS.indexOf(usuario.email.toLowerCase()) !== -1);
+  var emailAtual = String(usuario && usuario.email || "").trim().toLowerCase();
+  return emailAtual !== "" && ADMIN_EMAILS.some(function (emailAdmin) {
+    return emailAtual === String(emailAdmin).trim().toLowerCase();
+  });
 }
 
 function normalizar(texto) {
@@ -509,7 +521,10 @@ function configurarSessao(usuario) {
   var admin = ehAdministrador(usuario);
   var painel = document.getElementById("painel-admin");
   var linkPainel = document.getElementById("link-painel");
-  if (painel) painel.hidden = !admin;
+  if (painel) {
+    painel.hidden = !admin;
+    painel.style.display = admin ? "" : "none";
+  }
   if (linkPainel) linkPainel.hidden = !admin;
 
   atualizarPainelUsuario();
@@ -1179,11 +1194,19 @@ function criarSolicitacaoPremium(evento) {
     return;
   }
   var campoNome = document.getElementById("campo-premium-nome");
+  var campoEmail = document.getElementById("campo-premium-email");
   var campoObservacao = document.getElementById("campo-premium-observacao");
   var campoTransacao = document.getElementById("campo-premium-transacao");
   var botao = document.getElementById("btn-enviar-solicitacao");
   var feedback = document.getElementById("feedback-premium");
-  if (!campoNome || !campoObservacao || !campoTransacao) return;
+  if (!campoNome || !campoEmail || !campoObservacao || !campoTransacao) return;
+  var emailInformado = campoEmail.value.trim().toLowerCase();
+  if (!emailInformado || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInformado)) {
+    campoEmail.setCustomValidity("Informe um e-mail válido.");
+    campoEmail.reportValidity();
+    return;
+  }
+  campoEmail.setCustomValidity("");
   if (botao) botao.disabled = true;
 
   var banco = firebase.firestore();
@@ -1199,7 +1222,7 @@ function criarSolicitacaoPremium(evento) {
       }
       return banco.collection("solicitacoes_pagamento").add({
         userId: usuarioAtual.uid,
-        userEmail: usuarioAtual.email || "",
+        userEmail: emailInformado,
         userName: campoNome.value.trim(),
         plano: "premium_30_dias",
         valor: PRECO_PREMIUM,
