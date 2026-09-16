@@ -14,6 +14,8 @@ var MATERIAS = [];         // matérias ativas
 var TODAS_DEFICIENCIAS = []; // todas as deficiências (uso do administrador)
 var TODAS_MATERIAS = [];     // todas as matérias (uso do administrador)
 var DENUNCIAS = [];        // denúncias pendentes (uso do administrador)
+var MINHAS_SOLICITACOES = [];
+var TODAS_SOLICITACOES = [];
 var usuarioAtual = null;
 var saldoMoedas = 0;
 var premiumAtivo = false;
@@ -249,6 +251,8 @@ function configurarPremiumPublico() {
   var instrucoes = document.getElementById("instrucoes-pix");
   var botaoPix = document.getElementById("btn-copiar-pix");
   var botaoWhatsApp = document.getElementById("btn-whatsapp-premium");
+  var botaoSolicitar = document.getElementById("btn-solicitar-premium");
+  var formularioSolicitacao = document.getElementById("form-solicitar-premium");
   var feedback = document.getElementById("feedback-premium");
   if (instrucoes) {
     instrucoes.textContent = "Plano Premium: R$ " + PRECO_PREMIUM.toFixed(2).replace(".", ",") +
@@ -277,6 +281,20 @@ function configurarPremiumPublico() {
       window.open(url, "_blank", "noopener,noreferrer");
     });
   }
+  if (botaoSolicitar) {
+    botaoSolicitar.addEventListener("click", function () {
+      if (!usuarioAtual) {
+        alert("Entre com o Google para solicitar o Premium.");
+        return;
+      }
+      var campoNome = document.getElementById("campo-premium-nome");
+      var campoEmail = document.getElementById("campo-premium-email");
+      if (campoNome) campoNome.value = usuarioAtual.displayName || "";
+      if (campoEmail) campoEmail.value = usuarioAtual.email || "";
+      if (formularioSolicitacao) formularioSolicitacao.hidden = !formularioSolicitacao.hidden;
+    });
+  }
+  if (formularioSolicitacao) formularioSolicitacao.addEventListener("submit", criarSolicitacaoPremium);
 }
 
 // ---------- Administrador e utilitários ----------
@@ -346,6 +364,26 @@ function paraDenuncia(doc) {
     motivo: dados.motivo || "",
     status: dados.status || "pendente",
     criadoEm: dados.criadoEm || null
+  };
+}
+
+function paraSolicitacao(doc) {
+  var dados = doc.data();
+  return {
+    id: doc.id,
+    userId: dados.userId || "",
+    userEmail: dados.userEmail || "",
+    userName: dados.userName || "",
+    plano: dados.plano || "premium_30_dias",
+    valor: Number(dados.valor || 0),
+    status: dados.status || "pendente",
+    criadoEm: dados.criadoEm || null,
+    atualizadoEm: dados.atualizadoEm || null,
+    analisadoPor: dados.analisadoPor || "",
+    analisadoEm: dados.analisadoEm || null,
+    motivoRecusa: dados.motivoRecusa || "",
+    observacaoUsuario: dados.observacaoUsuario || "",
+    identificadorTransacao: dados.identificadorTransacao || ""
   };
 }
 
@@ -455,6 +493,8 @@ function configurarSessao(usuario) {
   idsDesbloqueadas = {};
   MINHAS_AULAS = [];
   TRANSACOES = [];
+  MINHAS_SOLICITACOES = [];
+  TODAS_SOLICITACOES = [];
   TODAS_AULAS = [];
   TODAS_DEFICIENCIAS = [];
   TODAS_MATERIAS = [];
@@ -539,6 +579,13 @@ function configurarSessao(usuario) {
     console.error("Erro ao carregar aulas desbloqueadas:", erro);
   }));
 
+  ouvintesUsuario.push(banco.collection("solicitacoes_pagamento").where("userId", "==", usuario.uid).onSnapshot(function (instantaneo) {
+    MINHAS_SOLICITACOES = ordenarPorData(instantaneo.docs.map(paraSolicitacao));
+    renderizarMinhasSolicitacoes();
+  }, function (erro) {
+    console.error("Erro ao carregar solicitações Premium:", erro);
+  }));
+
   // Administrador: todas as aulas, deficiências e matérias
   if (admin) {
     ouvintesUsuario.push(banco.collection("aulas").onSnapshot(function (instantaneo) {
@@ -577,6 +624,14 @@ function configurarSessao(usuario) {
     }, function (erro) {
       console.error("Erro ao carregar denúncias:", erro);
       mostrarErroLista("lista-denuncias", "Erro ao carregar denúncias. Verifique as regras do Firestore.");
+    }));
+
+    ouvintesUsuario.push(banco.collection("solicitacoes_pagamento").onSnapshot(function (instantaneo) {
+      TODAS_SOLICITACOES = ordenarPorData(instantaneo.docs.map(paraSolicitacao));
+      renderizarPagamentosAdmin();
+    }, function (erro) {
+      console.error("Erro ao carregar solicitações administrativas:", erro);
+      mostrarErroLista("lista-pagamentos-admin", "Erro ao carregar solicitações. Verifique as regras do Firestore.");
     }));
   }
 }
@@ -1117,6 +1172,95 @@ function atualizarPainelUsuario() {
   }
 }
 
+function criarSolicitacaoPremium(evento) {
+  evento.preventDefault();
+  if (!usuarioAtual || !firebasePronto) {
+    alert("Entre com o Google antes de solicitar o Premium.");
+    return;
+  }
+  var campoNome = document.getElementById("campo-premium-nome");
+  var campoObservacao = document.getElementById("campo-premium-observacao");
+  var campoTransacao = document.getElementById("campo-premium-transacao");
+  var botao = document.getElementById("btn-enviar-solicitacao");
+  var feedback = document.getElementById("feedback-premium");
+  if (!campoNome || !campoObservacao || !campoTransacao) return;
+  if (botao) botao.disabled = true;
+
+  var banco = firebase.firestore();
+  banco.collection("solicitacoes_pagamento")
+    .where("userId", "==", usuarioAtual.uid)
+    .get()
+    .then(function (resultado) {
+      var existePendente = resultado.docs.some(function (documento) {
+        return documento.data().status === "pendente";
+      });
+      if (existePendente) {
+        throw { code: "pending-payment-request" };
+      }
+      return banco.collection("solicitacoes_pagamento").add({
+        userId: usuarioAtual.uid,
+        userEmail: usuarioAtual.email || "",
+        userName: campoNome.value.trim(),
+        plano: "premium_30_dias",
+        valor: PRECO_PREMIUM,
+        chavePix: CHAVE_PIX_EFA,
+        status: "pendente",
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+        atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+        analisadoPor: "",
+        analisadoEm: null,
+        motivoRecusa: "",
+        observacaoUsuario: campoObservacao.value.trim(),
+        identificadorTransacao: campoTransacao.value.trim()
+      });
+    })
+    .then(function () {
+      var formulario = document.getElementById("form-solicitar-premium");
+      if (formulario) formulario.reset();
+      if (feedback) feedback.textContent = "Solicitação enviada. Aguarde a conferência do administrador.";
+    })
+    .catch(function (erro) {
+      if (erro && erro.code === "pending-payment-request") {
+        if (feedback) feedback.textContent = "Já existe uma solicitação pendente para sua conta.";
+        return;
+      }
+      console.error("Erro ao criar solicitação Premium:", erro);
+      if (feedback) feedback.textContent = "Não foi possível enviar a solicitação. Tente novamente.";
+    })
+    .finally(function () {
+      if (botao) botao.disabled = false;
+    });
+}
+
+function textoStatusSolicitacao(status) {
+  return status === "aprovada" ? "Aprovada" : status === "recusada" ? "Recusada" : status === "cancelada" ? "Cancelada" : "Pendente";
+}
+
+function renderizarMinhasSolicitacoes() {
+  var lista = document.getElementById("lista-solicitacoes-premium");
+  var vazio = document.getElementById("solicitacoes-premium-vazio");
+  if (!lista) return;
+  lista.innerHTML = "";
+  MINHAS_SOLICITACOES.forEach(function (solicitacao) {
+    var item = document.createElement("li");
+    item.className = "item-admin";
+    var titulo = document.createElement("strong");
+    titulo.textContent = solicitacao.plano + " · R$ " + solicitacao.valor.toFixed(2).replace(".", ",");
+    item.appendChild(titulo);
+    var meta = document.createElement("p");
+    meta.className = "item-meta";
+    meta.textContent = "Status: " + textoStatusSolicitacao(solicitacao.status) + " · " + formatarData(solicitacao.criadoEm);
+    item.appendChild(meta);
+    if (solicitacao.status === "recusada" && solicitacao.motivoRecusa) {
+      var motivo = document.createElement("p");
+      motivo.textContent = "Motivo: " + solicitacao.motivoRecusa;
+      item.appendChild(motivo);
+    }
+    lista.appendChild(item);
+  });
+  if (vazio) vazio.hidden = MINHAS_SOLICITACOES.length !== 0;
+}
+
 function atualizarResumoAdmin() {
   if (!ehAdministrador(usuarioAtual)) return;
   var totais = {
@@ -1370,6 +1514,126 @@ function renderizarDenuncias() {
     lista.appendChild(item);
   });
   if (aviso) aviso.hidden = DENUNCIAS.length !== 0;
+}
+
+function aprovarSolicitacaoPremium(solicitacao) {
+  if (!confirm("Confirme que o pagamento apareceu no extrato antes de aprovar esta solicitação.")) return;
+  var administrador = firebase.auth().currentUser;
+  var banco = firebase.firestore();
+  var referenciaSolicitacao = banco.collection("solicitacoes_pagamento").doc(solicitacao.id);
+  var referenciaUsuario = banco.collection("usuarios").doc(solicitacao.userId);
+  referenciaUsuario.get().then(function (usuarioDocumento) {
+    if (!usuarioDocumento.exists) {
+      alert("Usuário não encontrado. Peça para ele entrar no EFA usando o Google antes de liberar o Premium.");
+      throw { code: "premium-user-not-found" };
+    }
+    var dadosUsuario = usuarioDocumento.data();
+    var agora = new Date();
+    var validadeAtual = dadosUsuario.premiumAte && dadosUsuario.premiumAte.toDate ? dadosUsuario.premiumAte.toDate() : null;
+    var inicio = validadeAtual && validadeAtual.getTime() > agora.getTime() ? validadeAtual : agora;
+    var vencimento = new Date(inicio.getTime() + DIAS_PREMIUM * 24 * 60 * 60 * 1000);
+    var lote = banco.batch();
+    lote.update(referenciaSolicitacao, {
+      status: "aprovada",
+      atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      analisadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      analisadoPor: administrador ? (administrador.email || administrador.uid) : ""
+    });
+    lote.update(referenciaUsuario, {
+      premium: true,
+      premiumStatus: "ativo",
+      premiumStartedAt: firebase.firestore.Timestamp.fromDate(inicio),
+      premiumExpiresAt: firebase.firestore.Timestamp.fromDate(vencimento),
+      premiumAte: firebase.firestore.Timestamp.fromDate(vencimento),
+      premiumDays: DIAS_PREMIUM,
+      premiumActivatedBy: administrador ? (administrador.email || administrador.uid) : "",
+      premiumUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return lote.commit();
+  }).then(function () {
+    alert("Pagamento aprovado e Premium liberado por " + DIAS_PREMIUM + " dias.");
+  }).catch(function (erro) {
+    if (erro && erro.code === "premium-user-not-found") return;
+    console.error("Erro ao aprovar pagamento:", erro);
+    alert("Não foi possível aprovar o pagamento. Verifique as regras do Firestore.");
+  });
+}
+
+function recusarSolicitacaoPremium(solicitacao) {
+  var motivo = window.prompt("Informe o motivo da recusa:");
+  if (!motivo || !motivo.trim()) return;
+  var administrador = firebase.auth().currentUser;
+  firebase.firestore().collection("solicitacoes_pagamento").doc(solicitacao.id).update({
+    status: "recusada",
+    motivoRecusa: motivo.trim(),
+    atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    analisadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    analisadoPor: administrador ? (administrador.email || administrador.uid) : ""
+  }).then(function () {
+    alert("Solicitação recusada.");
+  }).catch(function (erro) {
+    console.error("Erro ao recusar pagamento:", erro);
+    alert("Não foi possível recusar a solicitação. Verifique as regras do Firestore.");
+  });
+}
+
+function renderizarPagamentosAdmin() {
+  var lista = document.getElementById("lista-pagamentos-admin");
+  var vazio = document.getElementById("pagamentos-admin-vazio");
+  var filtro = document.getElementById("filtro-pagamentos-admin");
+  if (!lista) return;
+  var statusFiltro = filtro ? filtro.value : "pendente";
+  var solicitacoes = TODAS_SOLICITACOES.filter(function (item) {
+    return !statusFiltro || item.status === statusFiltro;
+  });
+  lista.innerHTML = "";
+  solicitacoes.forEach(function (solicitacao) {
+    var item = document.createElement("li");
+    item.className = "item-admin";
+    var titulo = document.createElement("strong");
+    titulo.textContent = solicitacao.userName + " · " + solicitacao.userEmail;
+    item.appendChild(titulo);
+    var dados = document.createElement("p");
+    dados.className = "item-meta";
+    dados.textContent = solicitacao.plano + " · R$ " + solicitacao.valor.toFixed(2).replace(".", ",") +
+      " · " + textoStatusSolicitacao(solicitacao.status) + " · " + formatarData(solicitacao.criadoEm);
+    item.appendChild(dados);
+    if (solicitacao.observacaoUsuario) {
+      var observacao = document.createElement("p");
+      observacao.textContent = "Observação: " + solicitacao.observacaoUsuario;
+      item.appendChild(observacao);
+    }
+    if (solicitacao.identificadorTransacao) {
+      var transacao = document.createElement("p");
+      transacao.className = "item-meta";
+      transacao.textContent = "Transação: " + solicitacao.identificadorTransacao;
+      item.appendChild(transacao);
+    }
+    if (solicitacao.motivoRecusa) {
+      var recusa = document.createElement("p");
+      recusa.textContent = "Motivo da recusa: " + solicitacao.motivoRecusa;
+      item.appendChild(recusa);
+    }
+    if (solicitacao.status === "pendente") {
+      var acoes = document.createElement("div");
+      acoes.className = "item-admin-acoes";
+      var aprovar = document.createElement("button");
+      aprovar.type = "button";
+      aprovar.className = "btn-mini aprovar";
+      aprovar.textContent = "Aprovar após conferir";
+      aprovar.addEventListener("click", function () { aprovarSolicitacaoPremium(solicitacao); });
+      var recusar = document.createElement("button");
+      recusar.type = "button";
+      recusar.className = "btn-mini excluir";
+      recusar.textContent = "Recusar";
+      recusar.addEventListener("click", function () { recusarSolicitacaoPremium(solicitacao); });
+      acoes.appendChild(aprovar);
+      acoes.appendChild(recusar);
+      item.appendChild(acoes);
+    }
+    lista.appendChild(item);
+  });
+  if (vazio) vazio.hidden = solicitacoes.length !== 0;
 }
 
 // ---------- Painel do administrador: adicionar/editar aula ----------
@@ -2020,6 +2284,8 @@ document.addEventListener("DOMContentLoaded", function () {
   if (btnCancelarMateria) btnCancelarMateria.addEventListener("click", cancelarEdicaoMateria);
   var selectDeficienciaMaterias = document.getElementById("select-deficiencia-materias");
   if (selectDeficienciaMaterias) selectDeficienciaMaterias.addEventListener("change", renderizarMaterias);
+  var filtroPagamentos = document.getElementById("filtro-pagamentos-admin");
+  if (filtroPagamentos) filtroPagamentos.addEventListener("change", renderizarPagamentosAdmin);
 
   // Renderização inicial
   renderizarAulas();
@@ -2030,5 +2296,7 @@ document.addEventListener("DOMContentLoaded", function () {
   renderizarDeficiencias();
   renderizarMaterias();
   renderizarDenuncias();
+  renderizarMinhasSolicitacoes();
+  renderizarPagamentosAdmin();
   atualizarResumoAdmin();
 });

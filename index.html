@@ -134,8 +134,31 @@
         <div class="linha-botoes">
           <button type="button" id="btn-copiar-pix" class="btn-acesso">Copiar chave Pix</button>
           <button type="button" id="btn-whatsapp-premium" class="btn-acesso">Falar com o administrador</button>
+          <button type="button" id="btn-solicitar-premium" class="btn-acesso">Solicitar Premium</button>
         </div>
         <p id="feedback-premium" class="feedback-admin" role="status" aria-live="polite"></p>
+        <form id="form-solicitar-premium" class="form-premium" hidden>
+          <div class="campo-form">
+            <label for="campo-premium-nome">Nome</label>
+            <input type="text" id="campo-premium-nome" required maxlength="120" />
+          </div>
+          <div class="campo-form">
+            <label for="campo-premium-email">E-mail da conta Google</label>
+            <input type="email" id="campo-premium-email" readonly />
+          </div>
+          <div class="campo-form">
+            <label for="campo-premium-transacao">Identificador da transação (opcional)</label>
+            <input type="text" id="campo-premium-transacao" maxlength="120" />
+          </div>
+          <div class="campo-form">
+            <label for="campo-premium-observacao">Observação (opcional)</label>
+            <textarea id="campo-premium-observacao" rows="2" maxlength="300"></textarea>
+          </div>
+          <button type="submit" class="btn-acesso" id="btn-enviar-solicitacao">Enviar solicitação</button>
+        </form>
+        <h4>Minhas solicitações</h4>
+        <ul id="lista-solicitacoes-premium" class="lista-admin"></ul>
+        <p id="solicitacoes-premium-vazio" class="sem-resultados" role="status" hidden>Nenhuma solicitação enviada.</p>
       </div>
     </div>
   </section>
@@ -279,6 +302,19 @@
         <h3 id="titulo-denuncias">5. Denúncias</h3>
         <ul id="lista-denuncias" class="lista-admin"></ul>
         <p id="denuncias-vazio" class="sem-resultados" role="status" hidden>Nenhuma denúncia pendente.</p>
+      </section>
+
+      <section id="pagamentos-admin" class="secao-admin" aria-labelledby="titulo-pagamentos">
+        <h3 id="titulo-pagamentos">6. Solicitações de pagamento</h3>
+        <p class="painel-intro">Confirme o recebimento diretamente no extrato da conta responsável. Nunca aprove apenas com base em comprovante enviado.</p>
+        <select id="filtro-pagamentos-admin" class="select-bloco">
+          <option value="pendente">Pendentes</option>
+          <option value="aprovada">Aprovadas</option>
+          <option value="recusada">Recusadas</option>
+          <option value="">Todas</option>
+        </select>
+        <ul id="lista-pagamentos-admin" class="lista-admin"></ul>
+        <p id="pagamentos-admin-vazio" class="sem-resultados" role="status" hidden>Nenhuma solicitação encontrada.</p>
       </section>
     </div>
   </section>

@@ -786,6 +786,17 @@ main {
   margin-top: 12px;
 }
 
+.form-premium {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--borda);
+}
+
+.cartao-premium h4 {
+  margin-top: 20px;
+  margin-bottom: 8px;
+}
+
 /* Rodapé */
 .rodape {
   border-top: 1px solid var(--borda);

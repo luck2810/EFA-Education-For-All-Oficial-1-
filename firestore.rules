@@ -42,6 +42,24 @@ service cloud.firestore {
       allow delete: if ehAdmin();
     }
 
+    // Solicitações de Premium: o usuário só cria e lê as próprias.
+    // Aprovação, recusa e alteração do Premium ficam restritas ao administrador.
+    match /solicitacoes_pagamento/{solicitacaoId} {
+      allow read: if ehAdmin()
+        || (
+          autenticado()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow create: if autenticado()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pendente'
+        && request.resource.data.plano == 'premium_30_dias'
+        && request.resource.data.valor == 5;
+
+      allow update, delete: if ehAdmin();
+    }
+
     match /aulas/{aulaId} {
       allow read: if resource.data.status == 'aprovada'
         || (
