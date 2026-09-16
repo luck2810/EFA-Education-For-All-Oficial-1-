@@ -127,9 +127,15 @@
 
       <div class="cartao-premium" aria-labelledby="titulo-premium">
         <h3 id="titulo-premium">⭐ EFA Premium</h3>
-        <p>R$ 5,00 por mês: acesso ilimitado a todas as aulas, sem gastar Coins.</p>
+        <p>R$ 5,00 por 30 dias: acesso ilimitado a todas as aulas, sem gastar Coins.</p>
+        <p>Faça o Pix e envie o comprovante pelo WhatsApp do administrador. A liberação é manual após a confirmação do pagamento.</p>
+        <p id="instrucoes-pix" class="item-meta"></p>
         <p id="status-premium" class="item-meta"></p>
-        <button type="button" id="btn-premium" class="btn-acesso" disabled>Em breve</button>
+        <div class="linha-botoes">
+          <button type="button" id="btn-copiar-pix" class="btn-acesso">Copiar chave Pix</button>
+          <button type="button" id="btn-whatsapp-premium" class="btn-acesso">Falar com o administrador</button>
+        </div>
+        <p id="feedback-premium" class="feedback-admin" role="status" aria-live="polite"></p>
       </div>
     </div>
   </section>

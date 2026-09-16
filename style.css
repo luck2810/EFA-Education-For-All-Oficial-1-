@@ -782,6 +782,10 @@ main {
   margin-bottom: 12px;
 }
 
+.cartao-premium .linha-botoes {
+  margin-top: 12px;
+}
+
 /* Rodapé */
 .rodape {
   border-top: 1px solid var(--borda);

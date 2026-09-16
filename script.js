@@ -120,6 +120,12 @@ var FIREBASE_CONFIG = {
   measurementId: "G-ZZ3DJTQ627"
 };
 
+var PRECO_PREMIUM = 5;
+var DIAS_PREMIUM = 30;
+var CHAVE_PIX_EFA = "164.251.299-05";
+var WHATSAPP_ADMIN_PREMIUM = "554198466045";
+var MENSAGEM_WHATSAPP_PREMIUM = "Olá! Quero adquirir o Premium do EFA. Vou enviar o comprovante do Pix por aqui.";
+
 function iniciarFirebase() {
   var botao = document.getElementById("btn-google");
   if (typeof firebase === "undefined" || !FIREBASE_CONFIG.apiKey) {
@@ -237,6 +243,40 @@ function mostrarUsuario(usuario) {
     if (btnSair) btnSair.hidden = true;
   }
   configurarSessao(usuario);
+}
+
+function configurarPremiumPublico() {
+  var instrucoes = document.getElementById("instrucoes-pix");
+  var botaoPix = document.getElementById("btn-copiar-pix");
+  var botaoWhatsApp = document.getElementById("btn-whatsapp-premium");
+  var feedback = document.getElementById("feedback-premium");
+  if (instrucoes) {
+    instrucoes.textContent = "Plano Premium: R$ " + PRECO_PREMIUM.toFixed(2).replace(".", ",") +
+      " por " + DIAS_PREMIUM + " dias. Chave Pix: " + (CHAVE_PIX_EFA || "não cadastrada");
+  }
+  if (botaoPix) {
+    botaoPix.disabled = !CHAVE_PIX_EFA;
+    botaoPix.addEventListener("click", function () {
+      if (!CHAVE_PIX_EFA) return;
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        if (feedback) feedback.textContent = "Copie a chave Pix exibida acima manualmente.";
+        return;
+      }
+      navigator.clipboard.writeText(CHAVE_PIX_EFA).then(function () {
+        if (feedback) feedback.textContent = "Chave Pix copiada. Envie o comprovante pelo WhatsApp.";
+      }).catch(function () {
+        if (feedback) feedback.textContent = "Não foi possível copiar automaticamente. Copie a chave exibida acima.";
+      });
+    });
+  }
+  if (botaoWhatsApp) {
+    botaoWhatsApp.disabled = !WHATSAPP_ADMIN_PREMIUM;
+    botaoWhatsApp.addEventListener("click", function () {
+      if (!WHATSAPP_ADMIN_PREMIUM) return;
+      var url = "https://wa.me/" + WHATSAPP_ADMIN_PREMIUM + "?text=" + encodeURIComponent(MENSAGEM_WHATSAPP_PREMIUM);
+      window.open(url, "_blank", "noopener,noreferrer");
+    });
+  }
 }
 
 // ---------- Administrador e utilitários ----------
@@ -1884,6 +1924,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (btnFoco) btnFoco.addEventListener("click", function () { alternarFoco(this); });
   var btnTema = document.getElementById("btn-tema");
   if (btnTema) btnTema.addEventListener("click", alternarTema);
+  configurarPremiumPublico();
 
   // Firebase
   if (iniciarFirebase()) {
