@@ -703,7 +703,7 @@ function criarBotaoDesbloquear(aula) {
   var botao = document.createElement("button");
   botao.type = "button";
   botao.className = "btn-acesso desbloquear";
-  botao.textContent = "🔓 Desbloquear (🪙 1 Coin)";
+  botao.textContent = "🔓 Desbloquear (🟡 1 Coin)";
   botao.setAttribute("aria-label", "Desbloquear aula " + aula.titulo + " por 1 EFA Coin");
   botao.addEventListener("click", function () { desbloquearAula(aula); });
   return botao;
@@ -863,7 +863,7 @@ function desbloquearAula(aula) {
   if (ehMinhaAula(aula)) return;
   if (premiumAtivo || idsDesbloqueadas[aula.id]) return;
   if (saldoMoedas < 1) {
-    alert("Você precisa de 1 EFA Coin para desbloquear esta aula. Envie uma aula e, quando ela for aprovada, você recebe 🪙 1 Coin.");
+    alert("Você precisa de 1 EFA Coin para desbloquear esta aula. Envie uma aula e, quando ela for aprovada, você recebe 🟡 1 Coin.");
     return;
   }
   var banco = firebase.firestore();
@@ -967,7 +967,7 @@ function enviarAulaAnalise(evento) {
   }).then(function () {
     var feedback = document.getElementById("feedback-criar");
     if (feedback) {
-      feedback.textContent = "✅ Aula enviada para análise! Você receberá 🪙 1 EFA Coin quando ela for aprovada.";
+      feedback.textContent = "✅ Aula enviada para análise! Você receberá 🟡 1 EFA Coin quando ela for aprovada.";
     }
     var formulario = document.getElementById("form-criar-aula");
     if (formulario) formulario.reset();
@@ -1052,7 +1052,7 @@ function renderizarTransacoes() {
     var item = document.createElement("li");
     item.className = "item-transacao";
     var sinal = transacao.tipo === "ganho" ? "+" : "-";
-    item.textContent = "🪙 " + sinal + transacao.quantidade + " · " + transacao.motivo + " · " + formatarData(transacao.criadoEm);
+    item.textContent = "🟡 " + sinal + transacao.quantidade + " · " + transacao.motivo + " · " + formatarData(transacao.criadoEm);
     lista.appendChild(item);
   });
   if (aviso) aviso.hidden = TRANSACOES.length !== 0;
@@ -1064,16 +1064,16 @@ function atualizarPainelUsuario() {
   var saldo = document.getElementById("saldo-usuario");
   var statusPremium = document.getElementById("status-premium");
   if (badge) {
-    badge.textContent = "🪙 " + saldoMoedas;
+    badge.textContent = "🟡 " + saldoMoedas;
     badge.hidden = !usuarioAtual;
   }
   if (saldo) {
-    saldo.textContent = "Seu saldo: 🪙 " + saldoMoedas + " EFA Coin" + (saldoMoedas === 1 ? "" : "s");
+    saldo.textContent = "Seu saldo: 🟡 " + saldoMoedas + " EFA Coin" + (saldoMoedas === 1 ? "" : "s");
   }
   if (statusPremium) {
     statusPremium.textContent = premiumAtivo
       ? "⭐ Premium ativo. Todas as aulas liberadas, sem gastar Coins."
-      : "Plano gratuito: desbloqueie aulas com 🪙 1 Coin cada. Aulas criadas por você são sempre gratuitas.";
+      : "Plano gratuito: desbloqueie aulas com 🟡 1 Coin cada. Aulas criadas por você são sempre gratuitas.";
   }
 }
 
@@ -1234,7 +1234,7 @@ function renderizarPendentes() {
 }
 
 function aprovarAula(aula) {
-  if (!confirm('Aprovar a aula "' + aula.titulo + '"? O autor receberá 🪙 1 EFA Coin.')) return;
+  if (!confirm('Aprovar a aula "' + aula.titulo + '"? O autor receberá 🟡 1 EFA Coin.')) return;
   var banco = firebase.firestore();
   var lote = banco.batch();
   var administrador = firebase.auth().currentUser;
@@ -1257,7 +1257,7 @@ function aprovarAula(aula) {
     });
   }
   lote.commit().then(function () {
-    alert("✅ Aula aprovada e publicada no catálogo! O autor recebeu 🪙 1 EFA Coin.");
+    alert("✅ Aula aprovada e publicada no catálogo! O autor recebeu 🟡 1 EFA Coin.");
   }).catch(function (erro) {
     console.error("Erro ao aprovar aula:", erro);
     alert("Não foi possível aprovar a aula. " + (erro && erro.message ? "Detalhe: " + erro.message : "Verifique as regras do Firestore."));
