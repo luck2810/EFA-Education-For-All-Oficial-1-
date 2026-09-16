@@ -110,13 +110,13 @@ function alternarTema() {
 // ---------- Login com Google (Firebase) ----------
 // Configuração do projeto Firebase "EFA - Education For All" (App Web já criado).
 var FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCqxlREb8FG0LjG3KrgjWPg_lSVI6Dzdgk",
-  authDomain: "efa-education-for-all.firebaseapp.com",
-  projectId: "efa-education-for-all",
-  storageBucket: "efa-education-for-all.firebasestorage.app",
-  messagingSenderId: "953168018936",
-  appId: "1:953168018936:web:13b2bb55e55385bb332a0d",
-  measurementId: "G-RQHCZETXCV"
+  apiKey: "AIzaSyBQS4OtaZEqhLzqBRNW6Rj3kq5geJw5_MA",
+  authDomain: "efa-education-for-all-92554.firebaseapp.com",
+  projectId: "efa-education-for-all-92554",
+  storageBucket: "efa-education-for-all-92554.firebasestorage.app",
+  messagingSenderId: "622612088359",
+  appId: "1:622612088359:web:6c8ad1b5cb9908531ef002",
+  measurementId: "G-ZZ3DJTQ627"
 };
 
 function iniciarFirebase() {
