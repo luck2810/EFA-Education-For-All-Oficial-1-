@@ -225,6 +225,11 @@ function aoClicarBotaoGoogle() {
 }
 
 function mostrarUsuario(usuario) {
+  console.info("Usuário autenticado:", {
+    email: usuario && usuario.email ? usuario.email : "",
+    uid: usuario && usuario.uid ? usuario.uid : "",
+    displayName: usuario && usuario.displayName ? usuario.displayName : ""
+  });
   var botao = document.getElementById("btn-google");
   var info = document.getElementById("info-usuario");
   var btnSair = document.getElementById("btn-sair");
@@ -535,7 +540,7 @@ function configurarSessao(usuario) {
   var linkPainel = document.getElementById("link-painel");
   if (painel) {
     painel.hidden = !admin;
-    painel.style.display = admin ? "block" : "none";
+    painel.style.display = admin ? "" : "none";
   }
   if (linkPainel) linkPainel.hidden = !admin;
 
