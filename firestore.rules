@@ -1,0 +1,126 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function autenticado() {
+      return request.auth != null;
+    }
+
+    function ehAdmin() {
+      return autenticado()
+        && request.auth.token.email == 'administrador.efa@gmail.com';
+    }
+
+    function ehDono(userId) {
+      return autenticado() && request.auth.uid == userId;
+    }
+
+    match /usuarios/{userId} {
+      allow read: if ehDono(userId) || ehAdmin();
+
+      allow create: if ehDono(userId)
+        && request.resource.data.moedas == 0
+        && request.resource.data.premium == false;
+
+      allow update: if ehAdmin()
+        || (
+          ehDono(userId)
+          && request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly(['moedas'])
+          && resource.data.moedas >= 1
+          && request.resource.data.moedas == resource.data.moedas - 1
+        )
+        || (
+          ehDono(userId)
+          && request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly(['nome', 'email'])
+        );
+
+      allow delete: if ehAdmin();
+    }
+
+    match /aulas/{aulaId} {
+      allow read: if resource.data.status == 'aprovada'
+        || (
+          autenticado()
+          && resource.data.autorId == request.auth.uid
+        )
+        || ehAdmin();
+
+      allow create: if autenticado()
+        && request.resource.data.autorId == request.auth.uid
+        && request.resource.data.status == 'pendente';
+
+      allow update, delete: if ehAdmin();
+    }
+
+    match /downloads/{downloadId} {
+      allow read: if true;
+      allow create, update, delete: if ehAdmin();
+    }
+
+    match /deficiencias/{deficienciaId} {
+      allow read: if true;
+      allow create, update, delete: if ehAdmin();
+    }
+
+    match /materias/{materiaId} {
+      allow read: if true;
+      allow create, update, delete: if ehAdmin();
+    }
+
+    match /transacoes/{transacaoId} {
+      allow read: if ehAdmin()
+        || (
+          autenticado()
+          && resource.data.usuarioId == request.auth.uid
+        );
+
+      allow create: if ehAdmin()
+        || (
+          autenticado()
+          && request.resource.data.usuarioId == request.auth.uid
+          && request.resource.data.tipo == 'gasto'
+          && request.resource.data.quantidade == 1
+        );
+
+      allow update, delete: if ehAdmin();
+    }
+
+    match /aulasDesbloqueadas/{desbloqueioId} {
+      allow read: if ehAdmin()
+        || (
+          autenticado()
+          && resource.data.usuarioId == request.auth.uid
+        );
+
+      allow create: if autenticado()
+        && request.resource.data.usuarioId == request.auth.uid
+        && request.resource.data.aulaId is string
+        && request.resource.data.aulaId != '';
+
+      allow update, delete: if ehAdmin();
+    }
+
+    match /denuncias/{denunciaId} {
+      allow create: if autenticado()
+        && request.resource.data.denunciadorId == request.auth.uid
+        && request.resource.data.status == 'pendente';
+
+      allow read: if ehAdmin()
+        || (
+          autenticado()
+          && resource.data.denunciadorId == request.auth.uid
+        );
+
+      allow update, delete: if ehAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

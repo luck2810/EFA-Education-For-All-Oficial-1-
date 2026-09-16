@@ -13,6 +13,7 @@ var DEFICIENCIAS = [];     // deficiências ativas (catálogo e formulários)
 var MATERIAS = [];         // matérias ativas
 var TODAS_DEFICIENCIAS = []; // todas as deficiências (uso do administrador)
 var TODAS_MATERIAS = [];     // todas as matérias (uso do administrador)
+var DENUNCIAS = [];        // denúncias pendentes (uso do administrador)
 var usuarioAtual = null;
 var saldoMoedas = 0;
 var premiumAtivo = false;
@@ -294,6 +295,20 @@ function formatarData(carimbo) {
   }
 }
 
+function paraDenuncia(doc) {
+  var dados = doc.data();
+  return {
+    id: doc.id,
+    aulaId: dados.aulaId || "",
+    aulaTitulo: dados.aulaTitulo || "",
+    denunciadorId: dados.denunciadorId || "",
+    denunciadorNome: dados.denunciadorNome || "",
+    motivo: dados.motivo || "",
+    status: dados.status || "pendente",
+    criadoEm: dados.criadoEm || null
+  };
+}
+
 function paraAula(doc) {
   var dados = doc.data();
   return {
@@ -311,6 +326,11 @@ function paraAula(doc) {
     autorId: dados.autorId || "",
     autorNome: dados.autorNome || "",
     status: dados.status || "pendente",
+    aprovadoEm: dados.aprovadoEm || null,
+    aprovadoPor: dados.aprovadoPor || "",
+    rejeitadoEm: dados.rejeitadoEm || null,
+    rejeitadoPor: dados.rejeitadoPor || "",
+    motivoRejeicao: dados.motivoRejeicao || "",
     criadoEm: dados.criadoEm || null
   };
 }
@@ -398,6 +418,7 @@ function configurarSessao(usuario) {
   TODAS_AULAS = [];
   TODAS_DEFICIENCIAS = [];
   TODAS_MATERIAS = [];
+  DENUNCIAS = [];
 
   var logado = !!usuario;
   var areaUsuario = document.getElementById("area-usuario");
@@ -484,6 +505,7 @@ function configurarSessao(usuario) {
       TODAS_AULAS = ordenarPorData(instantaneo.docs.map(paraAula));
       renderizarPendentes();
       renderizarListaAdmin();
+      atualizarResumoAdmin();
     }, function (erro) {
       console.error("Erro ao carregar aulas do administrador:", erro);
       mostrarErroLista("lista-pendentes", "Erro ao carregar as aulas. Verifique as regras do Firestore.");
@@ -493,6 +515,7 @@ function configurarSessao(usuario) {
       TODAS_DEFICIENCIAS = ordenarPorOrdem(instantaneo.docs.map(paraDeficiencia));
       renderizarDeficiencias();
       renderizarMaterias();
+      atualizarResumoAdmin();
     }, function (erro) {
       console.error("Erro ao carregar deficiências:", erro);
       mostrarErroLista("lista-deficiencias", "Erro ao carregar as deficiências. Verifique as regras do Firestore.");
@@ -501,9 +524,19 @@ function configurarSessao(usuario) {
     ouvintesUsuario.push(banco.collection("materias").onSnapshot(function (instantaneo) {
       TODAS_MATERIAS = ordenarPorOrdem(instantaneo.docs.map(paraMateria));
       renderizarMaterias();
+      atualizarResumoAdmin();
     }, function (erro) {
       console.error("Erro ao carregar matérias:", erro);
       mostrarErroLista("lista-materias", "Erro ao carregar as matérias. Verifique as regras do Firestore.");
+    }));
+
+    ouvintesUsuario.push(banco.collection("denuncias").where("status", "==", "pendente").onSnapshot(function (instantaneo) {
+      DENUNCIAS = ordenarPorData(instantaneo.docs.map(paraDenuncia));
+      renderizarDenuncias();
+      atualizarResumoAdmin();
+    }, function (erro) {
+      console.error("Erro ao carregar denúncias:", erro);
+      mostrarErroLista("lista-denuncias", "Erro ao carregar denúncias. Verifique as regras do Firestore.");
     }));
   }
 }
@@ -733,8 +766,59 @@ function criarCard(aula) {
     acoes.appendChild(criarBotaoDesbloquear(aula));
   }
 
+  if (usuarioAtual && !ehMinhaAula(aula)) {
+    var botaoDenunciar = document.createElement("button");
+    botaoDenunciar.type = "button";
+    botaoDenunciar.className = "btn-mini";
+    botaoDenunciar.textContent = "⚑ Denunciar";
+    botaoDenunciar.setAttribute("aria-label", "Denunciar aula " + aula.titulo);
+    botaoDenunciar.addEventListener("click", function () { denunciarAula(aula); });
+    acoes.appendChild(botaoDenunciar);
+  }
+
   card.appendChild(acoes);
   return card;
+}
+
+function denunciarAula(aula) {
+  if (!usuarioAtual || !firebasePronto) {
+    alert("Entre com o Google para denunciar uma aula.");
+    return;
+  }
+  var motivo = window.prompt("Informe o motivo da denúncia:");
+  if (!motivo || !motivo.trim()) return;
+  var idDenuncia = usuarioAtual.uid + "_" + aula.id;
+  var banco = firebase.firestore();
+  var referencia = banco.collection("denuncias").doc(idDenuncia);
+  banco.collection("denuncias")
+    .where("denunciadorId", "==", usuarioAtual.uid)
+    .get().then(function (resultado) {
+    var duplicada = resultado.docs.some(function (documento) {
+      return documento.data().aulaId === aula.id;
+    });
+    if (duplicada) {
+      alert("Você já denunciou esta aula.");
+      return;
+    }
+    return referencia.set({
+      aulaId: aula.id,
+      aulaTitulo: aula.titulo,
+      denunciadorId: usuarioAtual.uid,
+      denunciadorNome: usuarioAtual.displayName || usuarioAtual.email || "Usuário",
+      motivo: motivo.trim(),
+      status: "pendente",
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function () {
+      return true;
+    });
+  }).then(function (resultado) {
+    if (resultado) alert("Denúncia enviada para análise.");
+  }).catch(function (erro) {
+    console.error("Erro ao denunciar aula:", erro);
+    alert(erro && erro.code === "permission-denied"
+      ? "Você não tem permissão para denunciar esta aula."
+      : "Não foi possível enviar a denúncia.");
+  });
 }
 
 // ---------- Renderizar catálogo (busca + deficiência + matéria juntas) ----------
@@ -869,7 +953,18 @@ function enviarAulaAnalise(evento) {
   var botaoEnviar = evento.submitter;
   if (botaoEnviar) botaoEnviar.disabled = true;
 
-  firebase.firestore().collection("aulas").add(dados).then(function () {
+  firebase.firestore().collection("aulas")
+    .where("autorId", "==", usuarioAtual.uid)
+    .get().then(function (resultado) {
+    var duplicada = resultado.docs.some(function (documento) {
+      var existente = documento.data();
+      return normalizar(existente.titulo) === normalizar(dados.titulo);
+    });
+    if (duplicada) {
+      throw { code: "duplicate-submission" };
+    }
+    return firebase.firestore().collection("aulas").add(dados);
+  }).then(function () {
     var feedback = document.getElementById("feedback-criar");
     if (feedback) {
       feedback.textContent = "✅ Aula enviada para análise! Você receberá 🪙 1 EFA Coin quando ela for aprovada.";
@@ -879,7 +974,9 @@ function enviarAulaAnalise(evento) {
     atualizarSelects();
   }).catch(function (erro) {
     console.error("Erro ao enviar aula:", erro);
-    alert(erro && erro.code === "permission-denied"
+    alert(erro && erro.code === "duplicate-submission"
+      ? "Você já enviou uma aula com este título."
+      : erro && erro.code === "permission-denied"
       ? "Permissão negada pelo Firestore. Confira as regras de segurança."
       : "Não foi possível enviar a aula. " + (erro && erro.message ? "Detalhe: " + erro.message : "Tente novamente."));
   }).finally(function () {
@@ -934,6 +1031,12 @@ function renderizarMinhasAulas() {
     cabecalho.appendChild(criarBadgeStatus(aula.status));
 
     item.appendChild(cabecalho);
+    if (aula.status === "recusada" && aula.motivoRejeicao) {
+      var motivo = document.createElement("p");
+      motivo.className = "item-meta";
+      motivo.textContent = "Motivo da rejeição: " + aula.motivoRejeicao;
+      item.appendChild(motivo);
+    }
     lista.appendChild(item);
   });
   if (aviso) aviso.hidden = MINHAS_AULAS.length !== 0;
@@ -974,6 +1077,30 @@ function atualizarPainelUsuario() {
   }
 }
 
+function atualizarResumoAdmin() {
+  if (!ehAdministrador(usuarioAtual)) return;
+  var totais = {
+    pendente: 0,
+    aprovada: 0,
+    recusada: 0
+  };
+  TODAS_AULAS.forEach(function (aula) {
+    if (Object.prototype.hasOwnProperty.call(totais, aula.status)) totais[aula.status]++;
+  });
+  var valores = {
+    "total-aulas-pendentes": totais.pendente,
+    "total-aulas-aprovadas": totais.aprovada,
+    "total-aulas-recusadas": totais.recusada,
+    "total-denuncias-pendentes": DENUNCIAS.length,
+    "total-materias": TODAS_MATERIAS.length,
+    "total-deficiencias": TODAS_DEFICIENCIAS.length
+  };
+  Object.keys(valores).forEach(function (id) {
+    var elemento = document.getElementById(id);
+    if (elemento) elemento.textContent = String(valores[id]);
+  });
+}
+
 // ---------- Painel do administrador: aulas pendentes ----------
 function mostrarErroLista(idLista, mensagem) {
   var lista = document.getElementById(idLista);
@@ -983,6 +1110,39 @@ function mostrarErroLista(idLista, mensagem) {
   item.className = "item-admin";
   item.textContent = mensagem;
   lista.appendChild(item);
+}
+
+function mostrarDetalhesAula(aula) {
+  var painel = document.getElementById("detalhes-aula-admin");
+  var conteudo = document.getElementById("conteudo-detalhes-aula");
+  if (!painel || !conteudo) return;
+  conteudo.innerHTML = "";
+  [
+    ["Título", aula.titulo],
+    ["Autor", aula.autorNome || "desconhecido"],
+    ["Matéria", aula.materiaNome || "não informada"],
+    ["Deficiência", aula.deficienciaNome || aula.etiqueta || "não informada"],
+    ["Descrição", aula.descricao],
+    ["Status", aula.status],
+    ["Enviada em", formatarData(aula.criadoEm)],
+    ["Vídeo", aula.youtube || "não informado"],
+    ["Material", aula.documento || "não informado"],
+    ["Motivo da rejeição", aula.motivoRejeicao || "não informado"]
+  ].forEach(function (item) {
+    var paragrafo = document.createElement("p");
+    var rotulo = document.createElement("strong");
+    rotulo.textContent = item[0] + ": ";
+    paragrafo.appendChild(rotulo);
+    paragrafo.appendChild(document.createTextNode(item[1]));
+    conteudo.appendChild(paragrafo);
+  });
+  painel.hidden = false;
+  painel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function fecharDetalhesAula() {
+  var painel = document.getElementById("detalhes-aula-admin");
+  if (painel) painel.hidden = true;
 }
 
 function renderizarPendentes() {
@@ -1046,6 +1206,11 @@ function renderizarPendentes() {
 
     var acoes = document.createElement("div");
     acoes.className = "item-admin-acoes";
+    var btnDetalhes = document.createElement("button");
+    btnDetalhes.type = "button";
+    btnDetalhes.className = "btn-mini";
+    btnDetalhes.textContent = "👁 Detalhes";
+    btnDetalhes.addEventListener("click", function () { mostrarDetalhesAula(aula); });
     var btnAprovar = document.createElement("button");
     btnAprovar.type = "button";
     btnAprovar.className = "btn-mini aprovar";
@@ -1058,6 +1223,7 @@ function renderizarPendentes() {
     btnRecusar.textContent = "❌ Recusar";
     btnRecusar.setAttribute("aria-label", "Recusar aula " + aula.titulo);
     btnRecusar.addEventListener("click", function () { recusarAula(aula); });
+    acoes.appendChild(btnDetalhes);
     acoes.appendChild(btnAprovar);
     acoes.appendChild(btnRecusar);
     item.appendChild(acoes);
@@ -1071,7 +1237,12 @@ function aprovarAula(aula) {
   if (!confirm('Aprovar a aula "' + aula.titulo + '"? O autor receberá 🪙 1 EFA Coin.')) return;
   var banco = firebase.firestore();
   var lote = banco.batch();
-  lote.update(banco.collection("aulas").doc(aula.id), { status: "aprovada" });
+  var administrador = firebase.auth().currentUser;
+  lote.update(banco.collection("aulas").doc(aula.id), {
+    status: "aprovada",
+    aprovadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    aprovadoPor: administrador ? (administrador.email || administrador.uid) : ""
+  });
   if (aula.autorId) {
     lote.update(banco.collection("usuarios").doc(aula.autorId), {
       moedas: firebase.firestore.FieldValue.increment(1)
@@ -1094,13 +1265,71 @@ function aprovarAula(aula) {
 }
 
 function recusarAula(aula) {
-  if (!confirm('Recusar a aula "' + aula.titulo + '"? Ela não aparecerá no catálogo e o autor não receberá Coins.')) return;
-  firebase.firestore().collection("aulas").doc(aula.id).update({ status: "recusada" }).then(function () {
+  var motivo = window.prompt('Informe o motivo da rejeição da aula "' + aula.titulo + '":');
+  if (!motivo || !motivo.trim()) return;
+  if (!confirm('Rejeitar a aula "' + aula.titulo + '"? Ela permanecerá disponível para o autor consultar.')) return;
+  var administrador = firebase.auth().currentUser;
+  firebase.firestore().collection("aulas").doc(aula.id).update({
+    status: "recusada",
+    motivoRejeicao: motivo.trim(),
+    rejeitadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    rejeitadoPor: administrador ? (administrador.email || administrador.uid) : ""
+  }).then(function () {
     alert("❌ Aula recusada.");
   }).catch(function (erro) {
     console.error("Erro ao recusar aula:", erro);
     alert("Não foi possível recusar a aula. " + (erro && erro.message ? "Detalhe: " + erro.message : "Verifique as regras do Firestore."));
   });
+}
+
+function resolverDenuncia(denuncia) {
+  if (!confirm("Marcar esta denúncia como resolvida?")) return;
+  var administrador = firebase.auth().currentUser;
+  firebase.firestore().collection("denuncias").doc(denuncia.id).update({
+    status: "resolvida",
+    resolvidaEm: firebase.firestore.FieldValue.serverTimestamp(),
+    resolvidaPor: administrador ? (administrador.email || administrador.uid) : ""
+  }).catch(function (erro) {
+    console.error("Erro ao resolver denúncia:", erro);
+    alert("Não foi possível resolver a denúncia. Verifique as regras do Firestore.");
+  });
+}
+
+function renderizarDenuncias() {
+  var lista = document.getElementById("lista-denuncias");
+  var aviso = document.getElementById("denuncias-vazio");
+  if (!lista) return;
+  lista.innerHTML = "";
+  DENUNCIAS.forEach(function (denuncia) {
+    var item = document.createElement("li");
+    item.className = "item-admin";
+
+    var titulo = document.createElement("strong");
+    titulo.textContent = denuncia.aulaTitulo || "Aula sem título";
+    item.appendChild(titulo);
+
+    var dados = document.createElement("p");
+    dados.className = "item-meta";
+    dados.textContent = "👤 " + (denuncia.denunciadorNome || "Usuário") +
+      " · 📅 " + formatarData(denuncia.criadoEm);
+    item.appendChild(dados);
+
+    var motivo = document.createElement("p");
+    motivo.textContent = "Motivo: " + denuncia.motivo;
+    item.appendChild(motivo);
+
+    var acoes = document.createElement("div");
+    acoes.className = "item-admin-acoes";
+    var resolver = document.createElement("button");
+    resolver.type = "button";
+    resolver.className = "btn-mini aprovar";
+    resolver.textContent = "✓ Marcar como resolvida";
+    resolver.addEventListener("click", function () { resolverDenuncia(denuncia); });
+    acoes.appendChild(resolver);
+    item.appendChild(acoes);
+    lista.appendChild(item);
+  });
+  if (aviso) aviso.hidden = DENUNCIAS.length !== 0;
 }
 
 // ---------- Painel do administrador: adicionar/editar aula ----------
@@ -1683,6 +1912,17 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  var btnFecharDetalhes = document.getElementById("btn-fechar-detalhes");
+  if (btnFecharDetalhes) btnFecharDetalhes.addEventListener("click", fecharDetalhesAula);
+  Array.prototype.forEach.call(document.querySelectorAll(".aba-admin"), function (aba) {
+    aba.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".aba-admin"), function (item) {
+        item.classList.remove("ativa");
+      });
+      aba.classList.add("ativa");
+    });
+  });
+
   // Busca e filtros do catálogo (deficiência → matéria → aulas)
   var campoBusca = document.getElementById("campo-busca");
   if (campoBusca) campoBusca.addEventListener("input", renderizarAulas);
@@ -1748,4 +1988,6 @@ document.addEventListener("DOMContentLoaded", function () {
   renderizarListaAdmin();
   renderizarDeficiencias();
   renderizarMaterias();
+  renderizarDenuncias();
+  atualizarResumoAdmin();
 });

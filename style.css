@@ -440,6 +440,78 @@ main {
   font-size: 1.2rem;
 }
 
+.abas-admin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 8px;
+  border-bottom: 1px solid var(--borda);
+}
+
+.aba-admin {
+  color: var(--texto);
+  padding: 10px 12px;
+  border-bottom: 3px solid transparent;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.aba-admin:hover,
+.aba-admin:focus-visible,
+.aba-admin.ativa {
+  color: var(--primaria);
+  border-bottom-color: var(--primaria);
+}
+
+.bloco-admin,
+.detalhes-admin {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  background-color: var(--fundo);
+}
+
+.resumo-admin {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.resumo-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  background-color: var(--cartao);
+}
+
+.resumo-item strong {
+  color: var(--primaria);
+  font-size: 1.7rem;
+}
+
+.resumo-item span {
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.detalhes-admin h3 {
+  margin: 0;
+}
+
+.detalhes-admin .item-admin-cabecalho {
+  justify-content: space-between;
+}
+
+.detalhes-admin p {
+  margin-top: 10px;
+  color: var(--texto-suave);
+}
+
 .secao-admin {
   margin-top: 32px;
   padding-top: 24px;
@@ -716,4 +788,15 @@ main {
   padding: 24px 20px;
   text-align: center;
   color: var(--texto-suave);
+}
+
+@media (max-width: 640px) {
+  .resumo-admin {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .aba-admin {
+    flex: 1 1 calc(50% - 8px);
+    text-align: center;
+  }
 }

@@ -138,7 +138,34 @@
     <div class="painel-caixa">
       <h2 id="titulo-painel">Painel Administrativo</h2>
 
-      <h3 id="titulo-pendentes">1. Aulas pendentes de análise</h3>
+      <nav class="abas-admin" aria-label="Seções administrativas">
+        <a class="aba-admin ativa" href="#dashboard-admin">Dashboard</a>
+        <a class="aba-admin" href="#aulas-admin">Aulas</a>
+        <a class="aba-admin" href="#conteudo-admin">Conteúdo</a>
+        <a class="aba-admin" href="#denuncias-admin">Denúncias</a>
+      </nav>
+
+      <section id="dashboard-admin" class="bloco-admin" aria-labelledby="titulo-dashboard">
+        <h3 id="titulo-dashboard">Dashboard</h3>
+        <div class="resumo-admin">
+          <div class="resumo-item"><strong id="total-aulas-pendentes">0</strong><span>Aulas pendentes</span></div>
+          <div class="resumo-item"><strong id="total-aulas-aprovadas">0</strong><span>Aulas aprovadas</span></div>
+          <div class="resumo-item"><strong id="total-aulas-recusadas">0</strong><span>Aulas rejeitadas</span></div>
+          <div class="resumo-item"><strong id="total-denuncias-pendentes">0</strong><span>Denúncias pendentes</span></div>
+          <div class="resumo-item"><strong id="total-materias">0</strong><span>Matérias</span></div>
+          <div class="resumo-item"><strong id="total-deficiencias">0</strong><span>Deficiências</span></div>
+        </div>
+      </section>
+
+      <section id="detalhes-aula-admin" class="detalhes-admin" aria-labelledby="titulo-detalhes-aula" hidden>
+        <div class="item-admin-cabecalho">
+          <h3 id="titulo-detalhes-aula">Detalhes da aula</h3>
+          <button type="button" id="btn-fechar-detalhes" class="btn-mini">Fechar</button>
+        </div>
+        <div id="conteudo-detalhes-aula"></div>
+      </section>
+
+      <h3 id="titulo-pendentes"><span id="aulas-admin">1. Aulas pendentes de análise</span></h3>
       <ul id="lista-pendentes" class="lista-admin"></ul>
       <p id="pendentes-vazio" class="sem-resultados" role="status" hidden>Nenhuma aula pendente.</p>
 
@@ -182,7 +209,7 @@
       <ul id="lista-admin" class="lista-admin"></ul>
       <p id="admin-vazio" class="sem-resultados" role="status" hidden>Nenhuma aula cadastrada.</p>
 
-      <h3 id="titulo-deficiencias" class="secao-admin">3. Gerenciar deficiências</h3>
+      <h3 id="titulo-deficiencias" class="secao-admin"><span id="conteudo-admin">3. Gerenciar deficiências</span></h3>
       <p class="painel-intro">Você pode cadastrar cada deficiência manualmente abaixo ou usar o botão para cadastrar as sugestões prontas (visual, auditiva, física, intelectual, TEA, TDAH, dislexia, discalculia, disgrafia e deficiência múltipla) com suas matérias básicas. O que já existe não é duplicado.</p>
       <div class="linha-botoes">
         <button type="button" id="btn-cadastrar-sugeridas" class="btn-acesso">📚 Cadastrar deficiências sugeridas</button>
@@ -241,6 +268,12 @@
       </form>
       <ul id="lista-materias" class="lista-admin"></ul>
       <p id="materias-vazio" class="sem-resultados" role="status" hidden>Nenhuma matéria cadastrada.</p>
+
+      <section id="denuncias-admin" class="secao-admin" aria-labelledby="titulo-denuncias">
+        <h3 id="titulo-denuncias">5. Denúncias</h3>
+        <ul id="lista-denuncias" class="lista-admin"></ul>
+        <p id="denuncias-vazio" class="sem-resultados" role="status" hidden>Nenhuma denúncia pendente.</p>
+      </section>
     </div>
   </section>
 
