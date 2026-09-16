@@ -225,6 +225,15 @@ function aoClicarBotaoGoogle() {
 }
 
 function mostrarUsuario(usuario) {
+  console.info("Diagnóstico completo do usuário:", {
+    existe: !!usuario,
+    tipo: typeof usuario,
+    email: usuario && usuario.email ? usuario.email : "",
+    uid: usuario && usuario.uid ? usuario.uid : "",
+    nome: usuario && usuario.displayName ? usuario.displayName : "",
+    providerData: usuario && usuario.providerData ? usuario.providerData : [],
+    chaves: usuario ? Object.keys(usuario) : []
+  });
   console.info("Usuário autenticado:", {
     email: usuario && usuario.email ? usuario.email : "",
     uid: usuario && usuario.uid ? usuario.uid : "",
@@ -358,10 +367,17 @@ function ehAdministrador(usuario) {
 }
 
 function obterEmailAutenticado(usuario) {
-  if (!usuario) return "";
-  var email = String(usuario.email || "").trim().toLowerCase();
+  var usuarioFirebase = usuario;
+  if ((!usuarioFirebase || !usuarioFirebase.email) && typeof firebase !== "undefined" && firebase.auth) {
+    usuarioFirebase = firebase.auth().currentUser;
+  }
+  if (!usuarioFirebase) {
+    console.warn("Nenhum usuário Firebase autenticado.");
+    return "";
+  }
+  var email = String(usuarioFirebase.email || "").trim().toLowerCase();
   if (email) return email;
-  var provedores = Array.isArray(usuario.providerData) ? usuario.providerData : [];
+  var provedores = Array.isArray(usuarioFirebase.providerData) ? usuarioFirebase.providerData : [];
   for (var i = 0; i < provedores.length; i++) {
     email = String(provedores[i].email || "").trim().toLowerCase();
     if (email) return email;
