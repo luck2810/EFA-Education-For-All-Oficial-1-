@@ -260,6 +260,24 @@ function mostrarUsuario(usuario) {
   }
   atualizarEmailSolicitacaoPremium(usuario);
   configurarSessao(usuario);
+  confirmarUsuarioFirebase(usuario);
+}
+
+function confirmarUsuarioFirebase(usuario) {
+  if (!usuario || obterEmailAutenticado(usuario) || typeof usuario.reload !== "function") return;
+  usuario.reload().then(function () {
+    var usuarioAtualizado = typeof firebase !== "undefined" && firebase.auth
+      ? firebase.auth().currentUser
+      : usuario;
+    var emailAtualizado = obterEmailAutenticado(usuarioAtualizado);
+    console.info("Usuário Firebase após reload:", {
+      email: emailAtualizado || "(vazio)",
+      uid: usuarioAtualizado && usuarioAtualizado.uid ? usuarioAtualizado.uid : "(sem UID)"
+    });
+    if (emailAtualizado) mostrarUsuario(usuarioAtualizado);
+  }).catch(function (erro) {
+    console.warn("Não foi possível atualizar o usuário Firebase:", erro);
+  });
 }
 
 function atualizarEmailSolicitacaoPremium(usuario) {
@@ -361,9 +379,16 @@ var DEFICIENCIAS_SUGERIDAS = [
 
 function ehAdministrador(usuario) {
   var emailAtual = obterEmailAutenticado(usuario);
-  return emailAtual !== "" && ADMIN_EMAILS.some(function (emailAdmin) {
+  var reconhecido = emailAtual !== "" && ADMIN_EMAILS.some(function (emailAdmin) {
     return emailAtual === String(emailAdmin).trim().toLowerCase();
   });
+  console.info("Verificação de administrador:", {
+    emailRecebido: emailAtual || "(vazio)",
+    emailEsperado: "administrador.efa@gmail.com",
+    reconhecido: reconhecido,
+    uid: usuario && usuario.uid ? usuario.uid : "(sem UID)"
+  });
+  return reconhecido;
 }
 
 function obterEmailAutenticado(usuario) {
