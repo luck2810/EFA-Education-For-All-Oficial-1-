@@ -9,7 +9,10 @@ service cloud.firestore {
 
     function ehAdmin() {
       return autenticado()
-        && request.auth.token.email == 'administrador.efa@gmail.com';
+        && (
+          request.auth.token.email == 'administrador.efa@gmail.com'
+          || request.auth.uid == 'gLliPVVszmbXEvDtr8SxaAZMJyJ2'
+        );
     }
 
     function ehDono(userId) {

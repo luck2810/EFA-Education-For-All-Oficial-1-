@@ -366,6 +366,9 @@ function configurarPremiumPublico() {
 var ADMIN_EMAILS = [
   "administrador.efa@gmail.com"
 ];
+var ADMIN_UIDS = [
+  "gLliPVVszmbXEvDtr8SxaAZMJyJ2"
+];
 
 // Rótulos legados dos perfis antigos (mantidos para exibir aulas criadas antes
 // do sistema de deficiências; não são usados nos formulários novos).
@@ -402,12 +405,16 @@ var DEFICIENCIAS_SUGERIDAS = [
 
 function ehAdministrador(usuario) {
   var emailAtual = obterEmailAutenticado(usuario) || emailAutenticadoAtual;
-  var reconhecido = emailAtual !== "" && ADMIN_EMAILS.some(function (emailAdmin) {
+  var reconhecidoPorEmail = emailAtual !== "" && ADMIN_EMAILS.some(function (emailAdmin) {
     return emailAtual === String(emailAdmin).trim().toLowerCase();
   });
+  var reconhecidoPorUid = !!(usuario && usuario.uid && ADMIN_UIDS.indexOf(usuario.uid) !== -1);
+  var reconhecido = reconhecidoPorEmail || reconhecidoPorUid;
   console.info("Verificação de administrador:", {
     emailRecebido: emailAtual || "(vazio)",
     emailEsperado: "administrador.efa@gmail.com",
+    uidRecebido: usuario && usuario.uid ? usuario.uid : "(sem UID)",
+    reconhecidoPorUid: reconhecidoPorUid,
     reconhecido: reconhecido,
     uid: usuario && usuario.uid ? usuario.uid : "(sem UID)"
   });
