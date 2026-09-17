@@ -19,6 +19,7 @@ var TODAS_SOLICITACOES = [];
 var usuarioAtual = null;
 var saldoMoedas = 0;
 var premiumAtivo = false;
+var emailAutenticadoAtual = "";
 var aulaEmEdicao = null;         // id da aula em edição no painel
 var deficienciaEmEdicao = null;  // id da deficiência em edição
 var materiaEmEdicao = null;       // id da matéria em edição
@@ -264,20 +265,42 @@ function mostrarUsuario(usuario) {
 }
 
 function confirmarUsuarioFirebase(usuario) {
-  if (!usuario || obterEmailAutenticado(usuario) || typeof usuario.reload !== "function") return;
-  usuario.reload().then(function () {
+  if (!usuario) return;
+  var atualizar = usuario.reload && typeof usuario.reload === "function"
+    ? usuario.reload()
+    : Promise.resolve();
+  atualizar.then(function () {
     var usuarioAtualizado = typeof firebase !== "undefined" && firebase.auth
-      ? firebase.auth().currentUser
+      ? firebase.auth().currentUser || usuario
       : usuario;
     var emailAtualizado = obterEmailAutenticado(usuarioAtualizado);
-    console.info("Usuário Firebase após reload:", {
-      email: emailAtualizado || "(vazio)",
-      uid: usuarioAtualizado && usuarioAtualizado.uid ? usuarioAtualizado.uid : "(sem UID)"
+    if (emailAtualizado) {
+      aplicarEmailAutenticado(usuarioAtualizado, emailAtualizado);
+      return null;
+    }
+    if (typeof usuarioAtualizado.getIdTokenResult !== "function") return null;
+    return usuarioAtualizado.getIdTokenResult(true).then(function (resultado) {
+      var emailToken = resultado && resultado.claims
+        ? String(resultado.claims.email || resultado.claims.email_address || "").trim().toLowerCase()
+        : "";
+      console.info("Usuário Firebase após reload/token:", {
+        email: emailToken || "(vazio)",
+        uid: usuarioAtualizado.uid || "(sem UID)",
+        claims: resultado && resultado.claims ? Object.keys(resultado.claims) : []
+      });
+      if (emailToken) aplicarEmailAutenticado(usuarioAtualizado, emailToken);
     });
-    if (emailAtualizado) mostrarUsuario(usuarioAtualizado);
   }).catch(function (erro) {
     console.warn("Não foi possível atualizar o usuário Firebase:", erro);
   });
+}
+
+function aplicarEmailAutenticado(usuario, email) {
+  emailAutenticadoAtual = String(email || "").trim().toLowerCase();
+  console.info("E-mail autenticado resolvido:", emailAutenticadoAtual || "(vazio)");
+  var admin = ehAdministrador(usuario);
+  atualizarAcessoPainelAdmin(admin);
+  atualizarEmailSolicitacaoPremium(usuario);
 }
 
 function atualizarEmailSolicitacaoPremium(usuario) {
@@ -378,7 +401,7 @@ var DEFICIENCIAS_SUGERIDAS = [
 ];
 
 function ehAdministrador(usuario) {
-  var emailAtual = obterEmailAutenticado(usuario);
+  var emailAtual = obterEmailAutenticado(usuario) || emailAutenticadoAtual;
   var reconhecido = emailAtual !== "" && ADMIN_EMAILS.some(function (emailAdmin) {
     return emailAtual === String(emailAdmin).trim().toLowerCase();
   });
@@ -554,10 +577,21 @@ function encerrarOuvintesUsuario() {
   }
 }
 
+function atualizarAcessoPainelAdmin(admin) {
+  var painel = document.getElementById("painel-admin");
+  var linkPainel = document.getElementById("link-painel");
+  if (painel) {
+    painel.hidden = !admin;
+    painel.style.display = admin ? "" : "none";
+  }
+  if (linkPainel) linkPainel.hidden = !admin;
+}
+
 // ---------- Sessão do usuário ----------
 function configurarSessao(usuario) {
   encerrarOuvintesUsuario();
   usuarioAtual = usuario;
+  if (!usuario) emailAutenticadoAtual = "";
   saldoMoedas = 0;
   premiumAtivo = false;
   idsDesbloqueadas = {};
@@ -577,18 +611,12 @@ function configurarSessao(usuario) {
   if (linkCriar) linkCriar.hidden = !logado;
 
   var admin = ehAdministrador(usuario);
-  var painel = document.getElementById("painel-admin");
-  var linkPainel = document.getElementById("link-painel");
-  if (painel) {
-    painel.hidden = !admin;
-    painel.style.display = admin ? "" : "none";
-  }
-  if (linkPainel) linkPainel.hidden = !admin;
+  atualizarAcessoPainelAdmin(admin);
 
   console.info("Sessão EFA:", {
     emailAutenticado: obterEmailAutenticado(usuario) || "não disponível",
     administradorReconhecido: admin,
-    painelEncontrado: !!painel
+    painelEncontrado: !!document.getElementById("painel-admin")
   });
 
   atualizarPainelUsuario();
