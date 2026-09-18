@@ -403,41 +403,53 @@ var DEFICIENCIAS_SUGERIDAS = [
   { nome: "Deficiência múltipla", descricao: "Associação de duas ou mais deficiências. Adaptações combinadas.", materias: MATERIAS_COMUNS }
 ];
 
+function obterDadosUsuarioAutenticado(usuario) {
+  var usuarioFirebase = usuario;
+  if ((!usuarioFirebase || !usuarioFirebase.email) && typeof firebase !== "undefined" && firebase.auth) {
+    usuarioFirebase = firebase.auth().currentUser || usuarioFirebase;
+  }
+  if (!usuarioFirebase) {
+    return { email: "", uid: "" };
+  }
+
+  var email = String(usuarioFirebase.email || "").trim().toLowerCase();
+  if (!email) {
+    var provedores = Array.isArray(usuarioFirebase.providerData) ? usuarioFirebase.providerData : [];
+    for (var i = 0; i < provedores.length; i++) {
+      email = String(provedores[i].email || "").trim().toLowerCase();
+      if (email) break;
+    }
+  }
+
+  var uid = String(usuarioFirebase.uid || "").trim();
+  return { email: email, uid: uid };
+}
+
 function ehAdministrador(usuario) {
-  var emailAtual = obterEmailAutenticado(usuario) || emailAutenticadoAtual;
-  var reconhecidoPorEmail = emailAtual !== "" && ADMIN_EMAILS.some(function (emailAdmin) {
+  var dadosUsuario = obterDadosUsuarioAutenticado(usuario);
+  var emailAtual = (dadosUsuario.email || emailAutenticadoAtual || "").trim().toLowerCase();
+  var uidAtual = (dadosUsuario.uid || "").trim();
+
+  var reconhecidoPorEmail = !!emailAtual && ADMIN_EMAILS.some(function (emailAdmin) {
     return emailAtual === String(emailAdmin).trim().toLowerCase();
   });
-  var reconhecidoPorUid = !!(usuario && usuario.uid && ADMIN_UIDS.indexOf(usuario.uid) !== -1);
+  var reconhecidoPorUid = !!uidAtual && ADMIN_UIDS.some(function (uidAdmin) {
+    return uidAtual === String(uidAdmin).trim();
+  });
+
   var reconhecido = reconhecidoPorEmail || reconhecidoPorUid;
   console.info("Verificação de administrador:", {
     emailRecebido: emailAtual || "(vazio)",
-    emailEsperado: "administrador.efa@gmail.com",
-    uidRecebido: usuario && usuario.uid ? usuario.uid : "(sem UID)",
-    reconhecidoPorUid: reconhecidoPorUid,
-    reconhecido: reconhecido,
-    uid: usuario && usuario.uid ? usuario.uid : "(sem UID)"
+    uidRecebido: uidAtual || "(sem UID)",
+    administrador: reconhecido,
+    reconhecidoPorEmail: reconhecidoPorEmail,
+    reconhecidoPorUid: reconhecidoPorUid
   });
   return reconhecido;
 }
 
 function obterEmailAutenticado(usuario) {
-  var usuarioFirebase = usuario;
-  if ((!usuarioFirebase || !usuarioFirebase.email) && typeof firebase !== "undefined" && firebase.auth) {
-    usuarioFirebase = firebase.auth().currentUser;
-  }
-  if (!usuarioFirebase) {
-    console.warn("Nenhum usuário Firebase autenticado.");
-    return "";
-  }
-  var email = String(usuarioFirebase.email || "").trim().toLowerCase();
-  if (email) return email;
-  var provedores = Array.isArray(usuarioFirebase.providerData) ? usuarioFirebase.providerData : [];
-  for (var i = 0; i < provedores.length; i++) {
-    email = String(provedores[i].email || "").trim().toLowerCase();
-    if (email) return email;
-  }
-  return "";
+  return obterDadosUsuarioAutenticado(usuario).email;
 }
 
 function normalizar(texto) {
