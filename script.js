@@ -226,76 +226,107 @@ function aoClicarBotaoGoogle() {
 }
 
 function mostrarUsuario(usuario) {
-  console.info("Diagnóstico completo do usuário:", {
-    existe: !!usuario,
-    tipo: typeof usuario,
-    email: usuario && usuario.email ? usuario.email : "",
-    uid: usuario && usuario.uid ? usuario.uid : "",
-    nome: usuario && usuario.displayName ? usuario.displayName : "",
-    providerData: usuario && usuario.providerData ? usuario.providerData : [],
-    chaves: usuario ? Object.keys(usuario) : []
+  var usuarioReal = usuario && usuario.uid ? usuario : (typeof firebase !== "undefined" && firebase.auth ? firebase.auth().currentUser : null);
+  console.info("AUTH:", {
+    email: usuarioReal ? usuarioReal.email : null,
+    uid: usuarioReal ? usuarioReal.uid : null
   });
-  console.info("Usuário autenticado:", {
-    email: usuario && usuario.email ? usuario.email : "",
-    uid: usuario && usuario.uid ? usuario.uid : "",
-    displayName: usuario && usuario.displayName ? usuario.displayName : ""
-  });
+
   var botao = document.getElementById("btn-google");
   var info = document.getElementById("info-usuario");
   var btnSair = document.getElementById("btn-sair");
-  if (usuario) {
-    var nome = usuario.displayName || usuario.email || "Usuário";
-    if (info) {
-      info.textContent = "Olá, " + nome;
-      info.hidden = false;
-    }
-    if (botao) botao.textContent = "Trocar conta";
-    if (btnSair) btnSair.hidden = false;
-  } else {
+
+  if (!usuarioReal) {
+    usuarioAtual = null;
+    emailAutenticadoAtual = "";
+    atualizarAcessoPainelAdmin(false);
     if (info) {
       info.textContent = "";
       info.hidden = true;
     }
     if (botao) botao.textContent = "Entrar com Google";
     if (btnSair) btnSair.hidden = true;
+    configurarSessao(null);
+    return;
   }
-  atualizarEmailSolicitacaoPremium(usuario);
-  configurarSessao(usuario);
-  confirmarUsuarioFirebase(usuario);
+
+  console.info("Diagnóstico completo do usuário:", {
+    existe: !!usuarioReal,
+    tipo: typeof usuarioReal,
+    email: usuarioReal.email || "",
+    uid: usuarioReal.uid || "",
+    nome: usuarioReal.displayName || "",
+    providerData: usuarioReal.providerData || [],
+    chaves: Object.keys(usuarioReal)
+  });
+
+  var nome = usuarioReal.displayName || usuarioReal.email || "Usuário";
+  if (info) {
+    info.textContent = "Olá, " + nome;
+    info.hidden = false;
+  }
+  if (botao) botao.textContent = "Trocar conta";
+  if (btnSair) btnSair.hidden = false;
+
+  atualizarEmailSolicitacaoPremium(usuarioReal);
+  confirmarUsuarioFirebase(usuarioReal);
+  configurarSessao(usuarioReal);
 }
 
 function confirmarUsuarioFirebase(usuario) {
-  if (!usuario) return;
-  var atualizar = usuario.reload && typeof usuario.reload === "function"
-    ? usuario.reload()
-    : Promise.resolve();
-  atualizar.then(function () {
-    var usuarioAtualizado = typeof firebase !== "undefined" && firebase.auth
-      ? firebase.auth().currentUser || usuario
-      : usuario;
-    var emailAtualizado = obterEmailAutenticado(usuarioAtualizado);
+  if (!usuario || !usuario.uid) return Promise.resolve(null);
+
+  var usuarioAtualizado = firebase && firebase.auth ? firebase.auth().currentUser || usuario : usuario;
+  if (!usuarioAtualizado || !usuarioAtualizado.uid) return Promise.resolve(null);
+
+  var carregarUsuario = usuarioAtualizado.reload && typeof usuarioAtualizado.reload === "function"
+    ? usuarioAtualizado.reload().then(function () {
+      return firebase && firebase.auth ? firebase.auth().currentUser || usuarioAtualizado : usuarioAtualizado;
+    })
+    : Promise.resolve(usuarioAtualizado);
+
+  return carregarUsuario.then(function (usuarioFinal) {
+    if (!usuarioFinal || !usuarioFinal.uid) return null;
+    var emailAtualizado = obterEmailAutenticado(usuarioFinal);
     if (emailAtualizado) {
-      aplicarEmailAutenticado(usuarioAtualizado, emailAtualizado);
-      return null;
+      emailAutenticadoAtual = emailAtualizado.trim().toLowerCase();
+      aplicarEmailAutenticado(usuarioFinal, emailAtualizado);
+      return usuarioFinal;
     }
-    if (typeof usuarioAtualizado.getIdTokenResult !== "function") return null;
-    return usuarioAtualizado.getIdTokenResult(true).then(function (resultado) {
+    if (typeof usuarioFinal.getIdTokenResult !== "function") {
+      var admin = ehAdministrador(usuarioFinal);
+      atualizarAcessoPainelAdmin(admin);
+      return usuarioFinal;
+    }
+    return usuarioFinal.getIdTokenResult(true).then(function (resultado) {
       var emailToken = resultado && resultado.claims
         ? String(resultado.claims.email || resultado.claims.email_address || "").trim().toLowerCase()
         : "";
       console.info("Usuário Firebase após reload/token:", {
         email: emailToken || "(vazio)",
-        uid: usuarioAtualizado.uid || "(sem UID)",
+        uid: usuarioFinal.uid || "(sem UID)",
         claims: resultado && resultado.claims ? Object.keys(resultado.claims) : []
       });
-      if (emailToken) aplicarEmailAutenticado(usuarioAtualizado, emailToken);
+      if (emailToken) {
+        emailAutenticadoAtual = emailToken;
+        aplicarEmailAutenticado(usuarioFinal, emailToken);
+      } else {
+        var admin = ehAdministrador(usuarioFinal);
+        atualizarAcessoPainelAdmin(admin);
+      }
+      return usuarioFinal;
     });
   }).catch(function (erro) {
     console.warn("Não foi possível atualizar o usuário Firebase:", erro);
+    return null;
   });
 }
 
 function aplicarEmailAutenticado(usuario, email) {
+  if (!usuario || !usuario.uid) {
+    atualizarAcessoPainelAdmin(false);
+    return;
+  }
   emailAutenticadoAtual = String(email || "").trim().toLowerCase();
   console.info("E-mail autenticado resolvido:", emailAutenticadoAtual || "(vazio)");
   var admin = ehAdministrador(usuario);
@@ -426,25 +457,31 @@ function obterDadosUsuarioAutenticado(usuario) {
 }
 
 function ehAdministrador(usuario) {
-  var dadosUsuario = obterDadosUsuarioAutenticado(usuario);
-  var emailAtual = (dadosUsuario.email || emailAutenticadoAtual || "").trim().toLowerCase();
-  var uidAtual = (dadosUsuario.uid || "").trim();
+  if (!usuario || !usuario.uid) {
+    console.info("ADMIN:", false, { motivo: "usuário inexistente ou sem UID" });
+    return false;
+  }
 
-  var reconhecidoPorEmail = !!emailAtual && ADMIN_EMAILS.some(function (emailAdmin) {
-    return emailAtual === String(emailAdmin).trim().toLowerCase();
-  });
-  var reconhecidoPorUid = !!uidAtual && ADMIN_UIDS.some(function (uidAdmin) {
-    return uidAtual === String(uidAdmin).trim();
-  });
+  var email = String(usuario.email || "").trim().toLowerCase();
+  if (!email && Array.isArray(usuario.providerData)) {
+    for (var i = 0; i < usuario.providerData.length; i++) {
+      email = String(usuario.providerData[i].email || "").trim().toLowerCase();
+      if (email) break;
+    }
+  }
 
+  var uid = String(usuario.uid || "").trim();
+  var reconhecidoPorEmail = email === "administrador.efa@gmail.com";
+  var reconhecidoPorUid = uid === "gLliPVVszmbXEvDtr8SxaAZMJyJ2";
   var reconhecido = reconhecidoPorEmail || reconhecidoPorUid;
-  console.info("Verificação de administrador:", {
-    emailRecebido: emailAtual || "(vazio)",
-    uidRecebido: uidAtual || "(sem UID)",
-    administrador: reconhecido,
+
+  console.info("ADMIN:", reconhecido, {
+    email: email || "(vazio)",
+    uid: uid || "(sem UID)",
     reconhecidoPorEmail: reconhecidoPorEmail,
     reconhecidoPorUid: reconhecidoPorUid
   });
+
   return reconhecido;
 }
 
@@ -610,7 +647,15 @@ function atualizarAcessoPainelAdmin(admin) {
 function configurarSessao(usuario) {
   encerrarOuvintesUsuario();
   usuarioAtual = usuario;
-  if (!usuario) emailAutenticadoAtual = "";
+  if (!usuario) {
+    emailAutenticadoAtual = "";
+    atualizarAcessoPainelAdmin(false);
+    console.info("Sessão EFA: logout/sem usuário");
+    atualizarPainelUsuario();
+    renderizarAulas();
+    return;
+  }
+
   saldoMoedas = 0;
   premiumAtivo = false;
   idsDesbloqueadas = {};
