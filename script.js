@@ -398,7 +398,7 @@ var ADMIN_EMAILS = [
   "administrador.efa@gmail.com"
 ];
 var ADMIN_UIDS = [
-  "gLliPVVszmbXEvDtr8SxaAZMJyJ2"
+  "N30w5z3U2mXPQjpIbsp9jwTq96q1"
 ];
 
 // Rótulos legados dos perfis antigos (mantidos para exibir aulas criadas antes
@@ -472,7 +472,7 @@ function ehAdministrador(usuario) {
 
   var uid = String(usuario.uid || "").trim();
   var reconhecidoPorEmail = email === "administrador.efa@gmail.com";
-  var reconhecidoPorUid = uid === "gLliPVVszmbXEvDtr8SxaAZMJyJ2";
+  var reconhecidoPorUid = uid === "N30w5z3U2mXPQjpIbsp9jwTq96q1";
   var reconhecido = reconhecidoPorEmail || reconhecidoPorUid;
 
   console.info("ADMIN:", reconhecido, {
