@@ -792,6 +792,14 @@ main {
   border-top: 1px solid var(--borda);
 }
 
+.form-solicitacao-estrutura {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  background-color: var(--fundo);
+}
+
 .cartao-premium h4 {
   margin-top: 20px;
   margin-bottom: 8px;

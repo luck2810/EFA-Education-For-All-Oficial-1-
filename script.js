@@ -15,12 +15,17 @@ var TODAS_DEFICIENCIAS = []; // todas as deficiências (uso do administrador)
 var TODAS_MATERIAS = [];     // todas as matérias (uso do administrador)
 var DENUNCIAS = [];        // denúncias pendentes (uso do administrador)
 var MINHAS_SOLICITACOES = [];
+var MINHAS_SOLICITACOES_ESTRUTURA = [];
 var TODAS_SOLICITACOES = [];
+var TODOS_USUARIOS = [];
+var TODAS_SOLICITACOES_ESTRUTURA = [];
 var usuarioAtual = null;
 var saldoMoedas = 0;
 var premiumAtivo = false;
+var passeEspecialAtual = false;
 var emailAutenticadoAtual = "";
 var aulaEmEdicao = null;         // id da aula em edição no painel
+var minhaAulaEmEdicao = null;    // id da aula do usuário em edição
 var deficienciaEmEdicao = null;  // id da deficiência em edição
 var materiaEmEdicao = null;       // id da matéria em edição
 var firebasePronto = false;
@@ -493,6 +498,36 @@ function normalizar(texto) {
   return (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+function normalizarNomeEstrutura(nome) {
+  return String(nome || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function nomeEstruturaValido(nome) {
+  var valor = String(nome || "").trim().replace(/\s+/g, " ");
+  if (!valor || valor.length > 200) return false;
+  if (!/[\p{L}\p{N}]/u.test(valor)) return false;
+  return valor;
+}
+
+function ehProfessorEspecial() {
+  return !!(usuarioAtual && passeEspecialAtual);
+}
+
+function adicionarOpcaoSolicitar(select, texto) {
+  if (!select || ehAdministrador(usuarioAtual) || ehProfessorEspecial()) return;
+  var opcao = document.createElement("option");
+  opcao.value = "__solicitar__";
+  opcao.textContent = texto;
+  select.appendChild(opcao);
+}
+
+function atualizarEstadoSolicitacoesEstrutura() {
+  var deficiencia = document.getElementById("campo-criar-deficiencia");
+  var materia = document.getElementById("campo-criar-materia");
+  if (deficiencia) adicionarOpcaoSolicitar(deficiencia, "➕ Adicionar nova deficiência");
+  if (materia) adicionarOpcaoSolicitar(materia, "➕ Adicionar nova matéria");
+}
+
 function formatarData(carimbo) {
   if (!carimbo || !carimbo.toDate) return "data indisponível";
   try {
@@ -569,6 +604,10 @@ function paraDeficiencia(doc) {
     nome: dados.nome || "",
     descricao: dados.descricao || "",
     ativa: dados.ativa !== false,
+    status: dados.status || (dados.ativa === false ? "pendente" : "aprovada"),
+    criadoPor: dados.criadoPor || "",
+    criadoPorNome: dados.criadoPorNome || "",
+    motivoRejeicao: dados.motivoRejeicao || "",
     ordem: Number(dados.ordem || 0),
     criadoEm: dados.criadoEm || null
   };
@@ -588,7 +627,39 @@ function paraMateria(doc) {
     nome: dados.nome || "",
     deficienciaIds: ids,
     ativa: dados.ativa !== false,
+    status: dados.status || (dados.ativa === false ? "pendente" : "aprovada"),
+    criadoPor: dados.criadoPor || "",
+    criadoPorNome: dados.criadoPorNome || "",
+    motivoRejeicao: dados.motivoRejeicao || "",
     ordem: Number(dados.ordem || 0),
+    criadoEm: dados.criadoEm || null
+  };
+}
+
+function paraUsuario(doc) {
+  var dados = doc.data();
+  return {
+    id: doc.id,
+    nome: dados.nome || "Usuário",
+    email: dados.email || "",
+    passeEspecial: dados.passeEspecial === true,
+    criadoEm: dados.criadoEm || null
+  };
+}
+
+function paraSolicitacaoEstrutura(doc) {
+  var dados = doc.data();
+  return {
+    id: doc.id,
+    tipo: dados.tipo || "",
+    nome: dados.nome || "",
+    descricao: dados.descricao || "",
+    deficienciaIds: Array.isArray(dados.deficienciaIds) ? dados.deficienciaIds.slice() : [],
+    status: dados.status || "pendente",
+    criadoPor: dados.criadoPor || "",
+    criadoPorNome: dados.criadoPorNome || "Usuário",
+    criadoPorEmail: dados.criadoPorEmail || "",
+    motivoRejeicao: dados.motivoRejeicao || "",
     criadoEm: dados.criadoEm || null
   };
 }
@@ -662,7 +733,11 @@ function configurarSessao(usuario) {
   MINHAS_AULAS = [];
   TRANSACOES = [];
   MINHAS_SOLICITACOES = [];
+  MINHAS_SOLICITACOES_ESTRUTURA = [];
   TODAS_SOLICITACOES = [];
+  TODOS_USUARIOS = [];
+  TODAS_SOLICITACOES_ESTRUTURA = [];
+  passeEspecialAtual = false;
   TODAS_AULAS = [];
   TODAS_DEFICIENCIAS = [];
   TODAS_MATERIAS = [];
@@ -698,6 +773,7 @@ function configurarSessao(usuario) {
         email: usuario.email,
         moedas: 0,
         premium: false,
+        passeEspecial: false,
         premiumAte: null,
         criadoEm: firebase.firestore.FieldValue.serverTimestamp()
       }).catch(function (erro) {
@@ -706,9 +782,11 @@ function configurarSessao(usuario) {
       return;
     }
     var dados = doc.data();
+    passeEspecialAtual = dados.passeEspecial === true;
     saldoMoedas = Number(dados.moedas || 0);
     premiumAtivo = !!(dados.premium && dados.premiumAte && dados.premiumAte.toMillis && dados.premiumAte.toMillis() > Date.now());
     atualizarPainelUsuario();
+    atualizarSelects();
     renderizarAulas();
   }, function (erro) {
     console.error("Erro ao carregar perfil:", erro);
@@ -755,6 +833,23 @@ function configurarSessao(usuario) {
     renderizarMinhasSolicitacoes();
   }, function (erro) {
     console.error("Erro ao carregar solicitações Premium:", erro);
+  }));
+
+  function atualizarSolicitacoesEstruturaDoUsuario() {
+    return Promise.all([
+      banco.collection("deficiencias").where("criadoPor", "==", usuario.uid).get(),
+      banco.collection("materias").where("criadoPor", "==", usuario.uid).get()
+    ]).then(function (resultados) {
+      MINHAS_SOLICITACOES_ESTRUTURA = resultados[0].docs.map(paraSolicitacaoEstrutura)
+        .concat(resultados[1].docs.map(paraSolicitacaoEstrutura));
+      renderizarMinhasSolicitacoesEstrutura();
+    });
+  }
+  ouvintesUsuario.push(banco.collection("deficiencias").where("criadoPor", "==", usuario.uid).onSnapshot(function () {
+    atualizarSolicitacoesEstruturaDoUsuario().catch(function (erro) { console.error("Erro ao carregar solicitações próprias:", erro); });
+  }));
+  ouvintesUsuario.push(banco.collection("materias").where("criadoPor", "==", usuario.uid).onSnapshot(function () {
+    atualizarSolicitacoesEstruturaDoUsuario().catch(function (erro) { console.error("Erro ao carregar solicitações próprias:", erro); });
   }));
 
   // Administrador: todas as aulas, deficiências e matérias
@@ -804,6 +899,34 @@ function configurarSessao(usuario) {
       console.error("Erro ao carregar solicitações administrativas:", erro);
       mostrarErroLista("lista-pagamentos-admin", "Erro ao carregar solicitações. Verifique as regras do Firestore.");
     }));
+    ouvintesUsuario.push(banco.collection("usuarios").onSnapshot(function (instantaneo) {
+      TODOS_USUARIOS = instantaneo.docs.map(paraUsuario);
+      renderizarUsuariosAdmin();
+    }, function (erro) {
+      console.error("Erro ao carregar usuários administrativos:", erro);
+      mostrarErroLista("lista-usuarios-admin", "Erro ao carregar usuários. Verifique as regras do Firestore.");
+    }));
+
+    ouvintesUsuario.push(banco.collection("deficiencias").where("status", "==", "pendente").onSnapshot(function (instantaneo) {
+      var solicitacoesDeficiencia = instantaneo.docs.map(paraSolicitacaoEstrutura);
+      banco.collection("materias").where("status", "==", "pendente").get().then(function (materias) {
+        TODAS_SOLICITACOES_ESTRUTURA = solicitacoesDeficiencia.concat(materias.docs.map(paraSolicitacaoEstrutura));
+        renderizarSolicitacoesEstruturaAdmin();
+      }).catch(function (erro) {
+        console.error("Erro ao carregar solicitações de matérias:", erro);
+      });
+    }, function (erro) {
+      console.error("Erro ao carregar solicitações de deficiências:", erro);
+      mostrarErroLista("lista-solicitacoes-estrutura-admin", "Erro ao carregar solicitações. Verifique as regras do Firestore.");
+    }));
+    ouvintesUsuario.push(banco.collection("materias").where("status", "==", "pendente").onSnapshot(function (instantaneo) {
+      var solicitacoesMateria = instantaneo.docs.map(paraSolicitacaoEstrutura);
+      banco.collection("deficiencias").where("status", "==", "pendente").get().then(function (deficiencias) {
+        TODAS_SOLICITACOES_ESTRUTURA = deficiencias.docs.map(paraSolicitacaoEstrutura).concat(solicitacoesMateria);
+        renderizarSolicitacoesEstruturaAdmin();
+      });
+    }));
+    garantirOpcoesIniciais();
   }
 }
 
@@ -919,6 +1042,7 @@ function atualizarSelects() {
 
   popularDeficiencias(document.getElementById("campo-criar-deficiencia"), "Selecione a deficiência", DEFICIENCIAS);
   popularMaterias(document.getElementById("campo-criar-materia"), document.getElementById("campo-criar-deficiencia").value, "Selecione a matéria", MATERIAS);
+  atualizarEstadoSolicitacoesEstrutura();
 
   popularDeficiencias(document.getElementById("campo-deficiencia"), "Selecione a deficiência", listaDeficiencias);
   popularMaterias(document.getElementById("campo-materia"), document.getElementById("campo-deficiencia").value, "Selecione a matéria", listaMaterias);
@@ -1207,9 +1331,14 @@ function enviarAulaAnalise(evento) {
     documento: campoDocumento.value.trim(),
     autorId: usuarioAtual.uid,
     autorNome: usuarioAtual.displayName || usuarioAtual.email,
-    status: "pendente", // nunca aparece no catálogo antes da aprovação
+    status: ehAdministrador(usuarioAtual) || ehProfessorEspecial() ? "aprovada" : "pendente",
     criadoEm: firebase.firestore.FieldValue.serverTimestamp()
   };
+
+  if (dados.status === "aprovada") {
+    dados.aprovadoEm = firebase.firestore.FieldValue.serverTimestamp();
+    dados.aprovadoPor = usuarioAtual.uid;
+  }
 
   if (!dados.titulo || !dados.descricao || !dados.youtube || !dados.documento) {
     alert("Preencha todos os campos da aula.");
@@ -1223,20 +1352,41 @@ function enviarAulaAnalise(evento) {
     .where("autorId", "==", usuarioAtual.uid)
     .get().then(function (resultado) {
     var duplicada = resultado.docs.some(function (documento) {
+      if (documento.id === minhaAulaEmEdicao) return false;
       var existente = documento.data();
       return normalizar(existente.titulo) === normalizar(dados.titulo);
     });
     if (duplicada) {
       throw { code: "duplicate-submission" };
     }
+    if (minhaAulaEmEdicao) {
+      var dadosEdicao = {
+        titulo: dados.titulo,
+        descricao: dados.descricao,
+        deficienciaId: dados.deficienciaId,
+        deficienciaNome: dados.deficienciaNome,
+        materiaId: dados.materiaId,
+        materiaNome: dados.materiaNome,
+        etiqueta: dados.etiqueta,
+        youtube: dados.youtube,
+        documento: dados.documento,
+        status: dados.status,
+        motivoRejeicao: ""
+      };
+      return firebase.firestore().collection("aulas").doc(minhaAulaEmEdicao).update(dadosEdicao);
+    }
     return firebase.firestore().collection("aulas").add(dados);
   }).then(function () {
     var feedback = document.getElementById("feedback-criar");
     if (feedback) {
-      feedback.textContent = "✅ Aula enviada para análise! Você receberá 🟡 1 EFA Coin quando ela for aprovada.";
+      feedback.textContent = dados.status === "aprovada"
+        ? "✅ Aula criada e aprovada diretamente."
+        : "✅ Aula enviada para análise! Você receberá 🟡 1 EFA Coin quando ela for aprovada.";
     }
     var formulario = document.getElementById("form-criar-aula");
     if (formulario) formulario.reset();
+    minhaAulaEmEdicao = null;
+    if (botaoEnviar) botaoEnviar.textContent = "📤 Enviar para análise";
     atualizarSelects();
   }).catch(function (erro) {
     console.error("Erro ao enviar aula:", erro);
@@ -1303,9 +1453,42 @@ function renderizarMinhasAulas() {
       motivo.textContent = "Motivo da rejeição: " + aula.motivoRejeicao;
       item.appendChild(motivo);
     }
+    var acoes = document.createElement("div");
+    acoes.className = "item-admin-acoes";
+    var editar = document.createElement("button");
+    editar.type = "button";
+    editar.className = "btn-mini";
+    editar.textContent = "✏️ Editar";
+    editar.addEventListener("click", function () { iniciarEdicaoMinhaAula(aula); });
+    acoes.appendChild(editar);
+    item.appendChild(acoes);
     lista.appendChild(item);
   });
   if (aviso) aviso.hidden = MINHAS_AULAS.length !== 0;
+}
+
+function iniciarEdicaoMinhaAula(aula) {
+  minhaAulaEmEdicao = aula.id;
+  var campos = {
+    titulo: document.getElementById("campo-criar-titulo"),
+    descricao: document.getElementById("campo-criar-descricao"),
+    deficiencia: document.getElementById("campo-criar-deficiencia"),
+    materia: document.getElementById("campo-criar-materia"),
+    youtube: document.getElementById("campo-criar-youtube"),
+    documento: document.getElementById("campo-criar-documento")
+  };
+  if (!campos.titulo || !campos.descricao) return;
+  campos.titulo.value = aula.titulo;
+  campos.descricao.value = aula.descricao;
+  campos.youtube.value = aula.youtube;
+  campos.documento.value = aula.documento;
+  atualizarSelects();
+  campos.deficiencia.value = aula.deficienciaId || "";
+  popularMaterias(campos.materia, campos.deficiencia.value, "Selecione a matéria", MATERIAS);
+  campos.materia.value = aula.materiaId || "";
+  var botao = document.getElementById("btn-enviar-aula");
+  if (botao) botao.textContent = ehProfessorEspecial() ? "💾 Salvar aula aprovada" : "💾 Salvar e reenviar para análise";
+  document.getElementById("form-criar-aula").scrollIntoView({ behavior: "smooth" });
 }
 
 // ---------- Transações ----------
@@ -1438,6 +1621,31 @@ function renderizarMinhasSolicitacoes() {
     lista.appendChild(item);
   });
   if (vazio) vazio.hidden = MINHAS_SOLICITACOES.length !== 0;
+}
+
+function renderizarMinhasSolicitacoesEstrutura() {
+  var lista = document.getElementById("lista-minhas-solicitacoes-estrutura");
+  var vazio = document.getElementById("minhas-solicitacoes-estrutura-vazio");
+  if (!lista) return;
+  lista.innerHTML = "";
+  MINHAS_SOLICITACOES_ESTRUTURA.forEach(function (solicitacao) {
+    var item = document.createElement("li");
+    item.className = "item-admin";
+    var titulo = document.createElement("strong");
+    titulo.textContent = (solicitacao.tipo === "materia" ? "Matéria: " : "Deficiência: ") + solicitacao.nome;
+    item.appendChild(titulo);
+    var status = document.createElement("p");
+    status.className = "item-meta";
+    status.textContent = "Status: " + textoStatusSolicitacao(solicitacao.status) + " · " + formatarData(solicitacao.criadoEm);
+    item.appendChild(status);
+    if (solicitacao.motivoRejeicao) {
+      var motivo = document.createElement("p");
+      motivo.textContent = "Motivo da rejeição: " + solicitacao.motivoRejeicao;
+      item.appendChild(motivo);
+    }
+    lista.appendChild(item);
+  });
+  if (vazio) vazio.hidden = MINHAS_SOLICITACOES_ESTRUTURA.length !== 0;
 }
 
 function atualizarResumoAdmin() {
@@ -1990,6 +2198,7 @@ function renderizarListaAdmin() {
 // ---------- Painel do administrador: deficiências ----------
 function salvarDeficiencia(evento) {
   evento.preventDefault();
+  if (!ehAdministrador(usuarioAtual)) return;
   var campoNome = document.getElementById("campo-deficiencia-nome");
   var campoDescricao = document.getElementById("campo-deficiencia-descricao");
   var campoAtiva = document.getElementById("campo-deficiencia-ativa");
@@ -2005,14 +2214,6 @@ function salvarDeficiencia(evento) {
     return;
   }
 
-  var duplicada = TODAS_DEFICIENCIAS.some(function (deficiencia) {
-    return deficiencia.id !== deficienciaEmEdicao && normalizar(deficiencia.nome) === normalizar(nome);
-  });
-  if (duplicada) {
-    alert("Já existe uma deficiência com esse nome.");
-    return;
-  }
-
   var ordem = parseInt(campoOrdem.value, 10);
   if (isNaN(ordem)) ordem = TODAS_DEFICIENCIAS.length + 1;
 
@@ -2020,18 +2221,30 @@ function salvarDeficiencia(evento) {
     nome: nome,
     descricao: campoDescricao.value.trim(),
     ativa: campoAtiva.checked,
+    status: "aprovada",
+    criadoPor: usuarioAtual.uid,
     ordem: ordem
   };
 
   var banco = firebase.firestore();
-  var operacao = deficienciaEmEdicao
-    ? banco.collection("deficiencias").doc(deficienciaEmEdicao).set(dados, { merge: true })
-    : banco.collection("deficiencias").add(Object.assign({}, dados, { criadoEm: firebase.firestore.FieldValue.serverTimestamp() }));
+  var operacao = banco.collection("deficiencias").get().then(function (resultado) {
+    var duplicada = resultado.docs.some(function (documento) {
+      return documento.id !== deficienciaEmEdicao && normalizarNomeEstrutura(documento.data().nome) === normalizarNomeEstrutura(nome);
+    });
+    if (duplicada) throw { code: "duplicate-structure" };
+    return deficienciaEmEdicao
+      ? banco.collection("deficiencias").doc(deficienciaEmEdicao).set(dados, { merge: true })
+      : banco.collection("deficiencias").add(Object.assign({}, dados, { criadoEm: firebase.firestore.FieldValue.serverTimestamp() }));
+  });
 
   operacao.then(function () {
     cancelarEdicaoDeficiencia();
     alert("✅ Deficiência salva.");
   }).catch(function (erro) {
+    if (erro && erro.code === "duplicate-structure") {
+      alert("Já existe uma deficiência com esse nome.");
+      return;
+    }
     console.error("Erro ao salvar deficiência:", erro);
     alert("Não foi possível salvar a deficiência. " + (erro && erro.message ? "Detalhe: " + erro.message : "Tente novamente."));
   });
@@ -2056,6 +2269,7 @@ function cancelarEdicaoDeficiencia() {
 }
 
 function excluirDeficiencia(deficiencia) {
+  if (!ehAdministrador(usuarioAtual)) return;
   var vinculadas = TODAS_MATERIAS.filter(function (materia) {
     return materia.deficienciaIds.indexOf(deficiencia.id) !== -1;
   });
@@ -2068,16 +2282,23 @@ function excluirDeficiencia(deficiencia) {
   }
   if (!confirm('Excluir a deficiência "' + deficiencia.nome + '"? As matérias compartilhadas manterão o vínculo com as outras deficiências e as aulas já criadas manterão o nome salvo.')) return;
   var banco = firebase.firestore();
-  var lote = banco.batch();
-  vinculadas.forEach(function (materia) {
-    var restantes = materia.deficienciaIds.filter(function (id) { return id !== deficiencia.id; });
-    lote.update(banco.collection("materias").doc(materia.id), {
-      deficienciaIds: restantes,
-      deficienciaId: restantes[0]
+  return banco.collection("aulas").where("deficienciaId", "==", deficiencia.id).get().then(function (aulas) {
+    if (!aulas.empty) {
+      return banco.collection("deficiencias").doc(deficiencia.id).update({ ativa: false, status: "aprovada" }).then(function () {
+        alert("A deficiência está sendo usada por aulas e foi desativada para novos cadastros.");
+      });
+    }
+    var lote = banco.batch();
+    vinculadas.forEach(function (materia) {
+      var restantes = materia.deficienciaIds.filter(function (id) { return id !== deficiencia.id; });
+      lote.update(banco.collection("materias").doc(materia.id), {
+        deficienciaIds: restantes,
+        deficienciaId: restantes[0] || ""
+      });
     });
-  });
-  lote.delete(banco.collection("deficiencias").doc(deficiencia.id));
-  lote.commit().then(function () {
+    lote.delete(banco.collection("deficiencias").doc(deficiencia.id));
+    return lote.commit();
+  }).then(function () {
     cancelarEdicaoDeficiencia();
   }).catch(function (erro) {
     console.error("Erro ao excluir deficiência:", erro);
@@ -2114,6 +2335,8 @@ function cadastrarDeficienciasSugeridas() {
         nome: sugerida.nome,
         descricao: sugerida.descricao,
         ativa: true,
+        status: "aprovada",
+        criadoPor: usuarioAtual.uid,
         ordem: TODAS_DEFICIENCIAS.length + novasDeficiencias + 1,
         criadoEm: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -2130,6 +2353,8 @@ function cadastrarDeficienciasSugeridas() {
         deficienciaId: deficienciaId,
         deficienciaIds: [deficienciaId],
         ativa: true,
+        status: "aprovada",
+        criadoPor: usuarioAtual.uid,
         ordem: indice + 1,
         criadoEm: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -2149,6 +2374,249 @@ function cadastrarDeficienciasSugeridas() {
     console.error("Erro ao cadastrar deficiências sugeridas:", erro);
     alert("Não foi possível cadastrar as sugestões. " + (erro && erro.message ? "Detalhe: " + erro.message : "Verifique as regras do Firestore e tente novamente."));
   });
+}
+
+function solicitarEstrutura(tipo, nome, dadosExtras, feedbackId) {
+  if (!usuarioAtual || !firebasePronto) {
+    alert("Entre com o Google antes de adicionar uma opção.");
+    return Promise.reject({ code: "not-authenticated" });
+  }
+  var nomeValido = nomeEstruturaValido(nome);
+  if (!nomeValido) {
+    alert("Informe um nome válido, com até 200 caracteres e conteúdo significativo.");
+    return Promise.reject({ code: "invalid-name" });
+  }
+
+  var colecao = tipo === "materia" ? "materias" : "deficiencias";
+  var banco = firebase.firestore();
+  var nomeNormalizado = normalizarNomeEstrutura(nomeValido);
+  var feedback = document.getElementById(feedbackId);
+  return banco.collection(colecao).get().then(function (resultado) {
+    var existente = resultado.docs.some(function (doc) {
+      return normalizarNomeEstrutura(doc.data().nome) === nomeNormalizado;
+    });
+    if (existente) {
+      throw { code: "duplicate-structure" };
+    }
+    var especial = ehProfessorEspecial() || ehAdministrador(usuarioAtual);
+    var dados = Object.assign({
+      tipo: tipo,
+      nome: nomeValido,
+      status: especial ? "aprovada" : "pendente",
+      ativa: especial,
+      criadoPor: usuarioAtual.uid,
+      criadoPorNome: usuarioAtual.displayName || usuarioAtual.email || "Usuário",
+      criadoPorEmail: usuarioAtual.email || "",
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      motivoRejeicao: "",
+      ordem: 0
+    }, dadosExtras || {});
+    return banco.collection(colecao).add(dados);
+  }).then(function () {
+    if (feedback) feedback.textContent = ehProfessorEspecial() ? "✅ Opção adicionada e aprovada." : "✅ Solicitação enviada para análise.";
+  }).catch(function (erro) {
+    if (erro && erro.code === "duplicate-structure") {
+      if (feedback) feedback.textContent = tipo === "materia" ? "Essa matéria já está cadastrada." : "Essa deficiência já está cadastrada.";
+      return;
+    }
+    if (erro && (erro.code === "invalid-name" || erro.code === "not-authenticated")) return;
+    console.error("Erro ao solicitar estrutura:", erro);
+    if (feedback) feedback.textContent = "Não foi possível salvar a solicitação. Tente novamente.";
+  });
+}
+
+function solicitarDeficiencia(evento) {
+  evento.preventDefault();
+  var campo = document.getElementById("campo-solicitar-deficiencia-nome");
+  if (!campo) return;
+  solicitarEstrutura("deficiencia", campo.value, { descricao: "" }, "feedback-solicitar-deficiencia").then(function () {
+    campo.value = "";
+    fecharSolicitacaoEstrutura("deficiencia");
+  });
+}
+
+function solicitarMateria(evento) {
+  evento.preventDefault();
+  var campo = document.getElementById("campo-solicitar-materia-nome");
+  var deficiencia = document.getElementById("campo-criar-deficiencia");
+  if (!campo) return;
+  var ids = deficiencia && deficiencia.value && deficiencia.value !== "__solicitar__" ? [deficiencia.value] : [];
+  if (!ids.length) {
+    alert("Selecione primeiro a deficiência vinculada à matéria.");
+    return;
+  }
+  solicitarEstrutura("materia", campo.value, {
+    deficienciaIds: ids,
+    deficienciaId: ids[0]
+  }, "feedback-solicitar-materia").then(function () {
+    campo.value = "";
+    fecharSolicitacaoEstrutura("materia");
+  });
+}
+
+function fecharSolicitacaoEstrutura(tipo) {
+  var form = document.getElementById("form-solicitar-" + tipo);
+  if (form) form.hidden = true;
+  var select = document.getElementById("campo-criar-" + tipo);
+  if (select) select.value = "";
+  if (tipo === "deficiencia") {
+    popularMaterias(document.getElementById("campo-criar-materia"), "", "Selecione a matéria", MATERIAS);
+  }
+  atualizarEstadoSolicitacoesEstrutura();
+}
+
+function garantirOpcoesIniciais() {
+  if (!ehAdministrador(usuarioAtual) || !firebasePronto) return;
+  var banco = firebase.firestore();
+  var nomesDeficiencias = ["TDAH", "Dislexia", "Transtorno do Espectro Autista (TEA)", "Baixa visão"];
+  var nomesMaterias = ["Matemática", "Português", "Ciências", "História"];
+  banco.collection("deficiencias").get().then(function (resultado) {
+    var existentes = resultado.docs.map(function (doc) { return { id: doc.id, nome: doc.data().nome }; });
+    var lote = banco.batch();
+    var ids = [];
+    nomesDeficiencias.forEach(function (nome, indice) {
+      var existente = existentes.filter(function (item) { return normalizarNomeEstrutura(item.nome) === normalizarNomeEstrutura(nome); })[0];
+      if (existente) {
+        ids.push(existente.id);
+        return;
+      }
+      var ref = banco.collection("deficiencias").doc();
+      ids.push(ref.id);
+      lote.set(ref, {
+        nome: nome,
+        descricao: "",
+        ativa: true,
+        status: "aprovada",
+        criadoPor: usuarioAtual.uid,
+        ordem: indice + 1,
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+    return lote.commit().then(function () { return ids; });
+  }).then(function (idsDeficiencias) {
+    return banco.collection("materias").get().then(function (resultado) {
+      var existentes = resultado.docs.map(function (doc) { return { id: doc.id, nome: doc.data().nome }; });
+      var lote = banco.batch();
+      nomesMaterias.forEach(function (nome, indice) {
+        var existe = existentes.some(function (item) { return normalizarNomeEstrutura(item.nome) === normalizarNomeEstrutura(nome); });
+        if (existe) return;
+        var ref = banco.collection("materias").doc();
+        lote.set(ref, {
+          nome: nome,
+          deficienciaIds: idsDeficiencias,
+          deficienciaId: idsDeficiencias[0] || "",
+          ativa: true,
+          status: "aprovada",
+          criadoPor: usuarioAtual.uid,
+          ordem: indice + 1,
+          criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      return lote.commit();
+    });
+  }).catch(function (erro) {
+    console.error("Erro ao garantir opções iniciais:", erro);
+  });
+}
+
+function alterarPasseEspecial(usuario, ativado) {
+  if (!ehAdministrador(usuarioAtual)) return;
+  firebase.firestore().collection("usuarios").doc(usuario.id).update({
+    passeEspecial: !!ativado,
+    passeEspecialAtualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    passeEspecialAtualizadoPor: usuarioAtual.uid
+  }).catch(function (erro) {
+    console.error("Erro ao alterar Passe Especial:", erro);
+    alert("Não foi possível alterar o Passe Especial. Verifique as regras do Firestore.");
+  });
+}
+
+function renderizarUsuariosAdmin() {
+  var lista = document.getElementById("lista-usuarios-admin");
+  var aviso = document.getElementById("usuarios-admin-vazio");
+  if (!lista) return;
+  lista.innerHTML = "";
+  TODOS_USUARIOS.forEach(function (usuario) {
+    var item = document.createElement("li");
+    item.className = "item-admin";
+    var titulo = document.createElement("strong");
+    titulo.textContent = usuario.nome;
+    item.appendChild(titulo);
+    var email = document.createElement("p");
+    email.className = "item-meta";
+    email.textContent = "E-mail: " + (usuario.email || "não informado") + " · UID: " + usuario.id;
+    item.appendChild(email);
+    var label = document.createElement("label");
+    label.className = "campo-linha";
+    var checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = usuario.passeEspecial;
+    checkbox.addEventListener("change", function () { alterarPasseEspecial(usuario, checkbox.checked); });
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(" Passe Especial"));
+    item.appendChild(label);
+    lista.appendChild(item);
+  });
+  if (aviso) aviso.hidden = TODOS_USUARIOS.length !== 0;
+}
+
+function atualizarSolicitacaoEstrutura(solicitacao, aprovar) {
+  if (!ehAdministrador(usuarioAtual)) return;
+  var motivo = "";
+  if (!aprovar) {
+    motivo = window.prompt("Informe o motivo da rejeição:");
+    if (!motivo || !motivo.trim()) return;
+  }
+  var colecao = solicitacao.tipo === "materia" ? "materias" : "deficiencias";
+  var administrador = firebase.auth().currentUser;
+  firebase.firestore().collection(colecao).doc(solicitacao.id).update({
+    status: aprovar ? "aprovada" : "recusada",
+    ativa: !!aprovar,
+    motivoRejeicao: aprovar ? "" : motivo.trim(),
+    analisadoPor: administrador ? administrador.uid : "",
+    analisadoEm: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function () {
+    alert(aprovar ? "Solicitação aprovada." : "Solicitação rejeitada.");
+  }).catch(function (erro) {
+    console.error("Erro ao atualizar solicitação de estrutura:", erro);
+    alert("Não foi possível atualizar a solicitação. Verifique as regras do Firestore.");
+  });
+}
+
+function renderizarSolicitacoesEstruturaAdmin() {
+  var lista = document.getElementById("lista-solicitacoes-estrutura-admin");
+  var aviso = document.getElementById("solicitacoes-estrutura-vazio");
+  if (!lista) return;
+  lista.innerHTML = "";
+  var pendentes = TODAS_SOLICITACOES_ESTRUTURA.filter(function (item) { return item.status === "pendente"; });
+  pendentes.forEach(function (solicitacao) {
+    var item = document.createElement("li");
+    item.className = "item-admin";
+    var titulo = document.createElement("strong");
+    titulo.textContent = (solicitacao.tipo === "materia" ? "Matéria: " : "Deficiência: ") + solicitacao.nome;
+    item.appendChild(titulo);
+    var meta = document.createElement("p");
+    meta.className = "item-meta";
+    meta.textContent = "Solicitado por: " + solicitacao.criadoPorNome + " · " + (solicitacao.criadoPorEmail || "e-mail não informado") + " · " + formatarData(solicitacao.criadoEm);
+    item.appendChild(meta);
+    var acoes = document.createElement("div");
+    acoes.className = "item-admin-acoes";
+    var aprovar = document.createElement("button");
+    aprovar.type = "button";
+    aprovar.className = "btn-mini aprovar";
+    aprovar.textContent = "Aprovar";
+    aprovar.addEventListener("click", function () { atualizarSolicitacaoEstrutura(solicitacao, true); });
+    var rejeitar = document.createElement("button");
+    rejeitar.type = "button";
+    rejeitar.className = "btn-mini excluir";
+    rejeitar.textContent = "Rejeitar";
+    rejeitar.addEventListener("click", function () { atualizarSolicitacaoEstrutura(solicitacao, false); });
+    acoes.appendChild(aprovar);
+    acoes.appendChild(rejeitar);
+    item.appendChild(acoes);
+    lista.appendChild(item);
+  });
+  if (aviso) aviso.hidden = pendentes.length !== 0;
 }
 
 function renderizarDeficiencias() {
@@ -2207,6 +2675,7 @@ function renderizarDeficiencias() {
 // ---------- Painel do administrador: matérias ----------
 function salvarMateria(evento) {
   evento.preventDefault();
+  if (!ehAdministrador(usuarioAtual)) return;
   var campoNome = document.getElementById("campo-materia-nome");
   var campoAtiva = document.getElementById("campo-materia-ativa");
   var campoOrdem = document.getElementById("campo-materia-ordem");
@@ -2226,17 +2695,6 @@ function salvarMateria(evento) {
     return;
   }
 
-  var duplicada = TODAS_MATERIAS.some(function (materia) {
-    if (materia.id === materiaEmEdicao) return false;
-    return deficienciaIds.some(function (id) {
-      return materia.deficienciaIds.indexOf(id) !== -1 && normalizar(materia.nome) === normalizar(nome);
-    });
-  });
-  if (duplicada) {
-    alert("Já existe uma matéria com esse nome em uma das deficiências selecionadas.");
-    return;
-  }
-
   var ordem = parseInt(campoOrdem.value, 10);
   if (isNaN(ordem)) {
     ordem = TODAS_MATERIAS.length + 1;
@@ -2247,18 +2705,34 @@ function salvarMateria(evento) {
     deficienciaIds: deficienciaIds,
     deficienciaId: deficienciaIds[0],
     ativa: campoAtiva.checked,
+    status: "aprovada",
+    criadoPor: usuarioAtual.uid,
     ordem: ordem
   };
 
   var banco = firebase.firestore();
-  var operacao = materiaEmEdicao
-    ? banco.collection("materias").doc(materiaEmEdicao).set(dados, { merge: true })
-    : banco.collection("materias").add(Object.assign({}, dados, { criadoEm: firebase.firestore.FieldValue.serverTimestamp() }));
+  var operacao = banco.collection("materias").get().then(function (resultado) {
+    var duplicada = resultado.docs.some(function (documento) {
+      var existente = documento.data();
+      var ids = Array.isArray(existente.deficienciaIds) ? existente.deficienciaIds : (existente.deficienciaId ? [existente.deficienciaId] : []);
+      return documento.id !== materiaEmEdicao
+        && normalizarNomeEstrutura(existente.nome) === normalizarNomeEstrutura(nome)
+        && deficienciaIds.some(function (id) { return ids.indexOf(id) !== -1; });
+    });
+    if (duplicada) throw { code: "duplicate-structure" };
+    return materiaEmEdicao
+      ? banco.collection("materias").doc(materiaEmEdicao).set(dados, { merge: true })
+      : banco.collection("materias").add(Object.assign({}, dados, { criadoEm: firebase.firestore.FieldValue.serverTimestamp() }));
+  });
 
   operacao.then(function () {
     cancelarEdicaoMateria();
     alert("✅ Matéria salva.");
   }).catch(function (erro) {
+    if (erro && erro.code === "duplicate-structure") {
+      alert("Já existe uma matéria com esse nome em uma das deficiências selecionadas.");
+      return;
+    }
     console.error("Erro ao salvar matéria:", erro);
     alert("Não foi possível salvar a matéria. " + (erro && erro.message ? "Detalhe: " + erro.message : "Tente novamente."));
   });
@@ -2286,8 +2760,17 @@ function cancelarEdicaoMateria() {
 }
 
 function excluirMateria(materia) {
+  if (!ehAdministrador(usuarioAtual)) return;
   if (!confirm('Excluir a matéria "' + materia.nome + '"? As aulas já criadas manterão o nome salvo.')) return;
-  firebase.firestore().collection("materias").doc(materia.id).delete().then(function () {
+  var banco = firebase.firestore();
+  banco.collection("aulas").where("materiaId", "==", materia.id).get().then(function (aulas) {
+    if (!aulas.empty) {
+      return banco.collection("materias").doc(materia.id).update({ ativa: false, status: "aprovada" }).then(function () {
+        alert("A matéria está sendo usada por aulas e foi desativada para novos cadastros.");
+      });
+    }
+    return banco.collection("materias").doc(materia.id).delete();
+  }).then(function () {
     cancelarEdicaoMateria();
   }).catch(function (erro) {
     console.error("Erro ao excluir matéria:", erro);
@@ -2430,9 +2913,55 @@ document.addEventListener("DOMContentLoaded", function () {
   var campoCriarDeficiencia = document.getElementById("campo-criar-deficiencia");
   if (campoCriarDeficiencia) {
     campoCriarDeficiencia.addEventListener("change", function () {
+      if (campoCriarDeficiencia.value === "__solicitar__") {
+        campoCriarDeficiencia.value = "";
+        var formularioDeficiencia = document.getElementById("form-solicitar-deficiencia");
+        if (formularioDeficiencia) {
+          formularioDeficiencia.hidden = false;
+          document.getElementById("campo-solicitar-deficiencia-nome").focus();
+        }
+        return;
+      }
       popularMaterias(document.getElementById("campo-criar-materia"), campoCriarDeficiencia.value, "Selecione a matéria", MATERIAS);
+      atualizarEstadoSolicitacoesEstrutura();
     });
   }
+  var campoCriarMateria = document.getElementById("campo-criar-materia");
+  if (campoCriarMateria) {
+    campoCriarMateria.addEventListener("change", function () {
+      if (campoCriarMateria.value !== "__solicitar__") return;
+      campoCriarMateria.value = "";
+      var formularioMateria = document.getElementById("form-solicitar-materia");
+      if (formularioMateria) {
+        formularioMateria.hidden = false;
+        document.getElementById("campo-solicitar-materia-nome").focus();
+      }
+    });
+  }
+  var formSolicitarDeficiencia = document.getElementById("form-solicitar-deficiencia");
+  if (formSolicitarDeficiencia) formSolicitarDeficiencia.addEventListener("submit", solicitarDeficiencia);
+  var formSolicitarMateria = document.getElementById("form-solicitar-materia");
+  if (formSolicitarMateria) formSolicitarMateria.addEventListener("submit", solicitarMateria);
+  var btnSolicitarDeficiencia = document.getElementById("btn-solicitar-deficiencia");
+  if (btnSolicitarDeficiencia) btnSolicitarDeficiencia.addEventListener("click", function () {
+    var formulario = document.getElementById("form-solicitar-deficiencia");
+    if (formulario) {
+      formulario.hidden = false;
+      document.getElementById("campo-solicitar-deficiencia-nome").focus();
+    }
+  });
+  var btnSolicitarMateria = document.getElementById("btn-solicitar-materia");
+  if (btnSolicitarMateria) btnSolicitarMateria.addEventListener("click", function () {
+    var formulario = document.getElementById("form-solicitar-materia");
+    if (formulario) {
+      formulario.hidden = false;
+      document.getElementById("campo-solicitar-materia-nome").focus();
+    }
+  });
+  var btnCancelarSolicitarDeficiencia = document.getElementById("btn-cancelar-solicitar-deficiencia");
+  if (btnCancelarSolicitarDeficiencia) btnCancelarSolicitarDeficiencia.addEventListener("click", function () { fecharSolicitacaoEstrutura("deficiencia"); });
+  var btnCancelarSolicitarMateria = document.getElementById("btn-cancelar-solicitar-materia");
+  if (btnCancelarSolicitarMateria) btnCancelarSolicitarMateria.addEventListener("click", function () { fecharSolicitacaoEstrutura("materia"); });
 
   // Painel do administrador: aulas
   var formAula = document.getElementById("form-aula");

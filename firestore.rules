@@ -10,9 +10,14 @@ service cloud.firestore {
     function ehAdmin() {
       return autenticado()
         && (
-          (request.auth.token.email != null && request.auth.token.email.toLowerCase() == 'administrador.efa@gmail.com')
+          request.auth.token.email == 'administrador.efa@gmail.com'
           || request.auth.uid == 'N30w5z3U2mXPQjpIbsp9jwTq96q1'
         );
+    }
+
+    function ehPasseEspecial() {
+      return autenticado()
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.passeEspecial == true;
     }
 
     function ehDono(userId) {
@@ -24,7 +29,8 @@ service cloud.firestore {
 
       allow create: if ehDono(userId)
         && request.resource.data.moedas == 0
-        && request.resource.data.premium == false;
+        && request.resource.data.premium == false
+        && request.resource.data.passeEspecial == false;
 
       allow update: if ehAdmin()
         || (
@@ -73,9 +79,29 @@ service cloud.firestore {
 
       allow create: if autenticado()
         && request.resource.data.autorId == request.auth.uid
-        && request.resource.data.status == 'pendente';
+        && (
+          request.resource.data.status == 'pendente'
+          || (ehPasseEspecial() && request.resource.data.status == 'aprovada')
+          || (ehAdmin() && request.resource.data.status == 'aprovada')
+        );
 
-      allow update, delete: if ehAdmin();
+      allow update: if ehAdmin()
+        || (
+          autenticado()
+          && resource.data.autorId == request.auth.uid
+          && request.resource.data.autorId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'titulo', 'descricao', 'deficienciaId', 'deficienciaNome',
+            'materiaId', 'materiaNome', 'etiqueta', 'youtube', 'documento',
+            'status', 'motivoRejeicao'
+          ])
+          && (
+            (ehPasseEspecial() && request.resource.data.status == 'aprovada')
+            || (!ehPasseEspecial() && request.resource.data.status == 'pendente')
+          )
+        );
+
+      allow delete: if ehAdmin();
     }
 
     match /downloads/{downloadId} {
@@ -85,12 +111,36 @@ service cloud.firestore {
 
     match /deficiencias/{deficienciaId} {
       allow read: if true;
-      allow create, update, delete: if ehAdmin();
+      allow create: if ehAdmin()
+        || (
+          autenticado()
+          && request.resource.data.criadoPor == request.auth.uid
+          && request.resource.data.nome is string
+          && request.resource.data.nome.size() > 0
+          && request.resource.data.nome.size() <= 200
+          && (
+            (ehPasseEspecial() && request.resource.data.status == 'aprovada' && request.resource.data.ativa == true)
+            || (!ehPasseEspecial() && request.resource.data.status == 'pendente' && request.resource.data.ativa == false)
+          )
+        );
+      allow update, delete: if ehAdmin();
     }
 
     match /materias/{materiaId} {
       allow read: if true;
-      allow create, update, delete: if ehAdmin();
+      allow create: if ehAdmin()
+        || (
+          autenticado()
+          && request.resource.data.criadoPor == request.auth.uid
+          && request.resource.data.nome is string
+          && request.resource.data.nome.size() > 0
+          && request.resource.data.nome.size() <= 200
+          && (
+            (ehPasseEspecial() && request.resource.data.status == 'aprovada' && request.resource.data.ativa == true)
+            || (!ehPasseEspecial() && request.resource.data.status == 'pendente' && request.resource.data.ativa == false)
+          )
+        );
+      allow update, delete: if ehAdmin();
     }
 
     match /transacoes/{transacaoId} {

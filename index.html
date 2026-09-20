@@ -95,12 +95,36 @@
           <select id="campo-criar-deficiencia" required>
             <option value="">Selecione a deficiência</option>
           </select>
+          <button type="button" id="btn-solicitar-deficiencia" class="btn-mini">➕ Adicionar nova deficiência</button>
+          <form id="form-solicitar-deficiencia" class="form-solicitacao-estrutura" hidden>
+            <div class="campo-form">
+              <label for="campo-solicitar-deficiencia-nome">Nova deficiência/condição</label>
+              <input type="text" id="campo-solicitar-deficiencia-nome" maxlength="200" required />
+            </div>
+            <div class="linha-botoes">
+              <button type="submit" class="btn-acesso">Enviar</button>
+              <button type="button" id="btn-cancelar-solicitar-deficiencia" class="btn-perigo">Cancelar</button>
+            </div>
+            <p id="feedback-solicitar-deficiencia" class="feedback-admin" role="status" aria-live="polite"></p>
+          </form>
         </div>
         <div class="campo-form">
           <label for="campo-criar-materia">Matéria</label>
           <select id="campo-criar-materia" required>
             <option value="">Selecione a matéria</option>
           </select>
+          <button type="button" id="btn-solicitar-materia" class="btn-mini">➕ Adicionar nova matéria</button>
+          <form id="form-solicitar-materia" class="form-solicitacao-estrutura" hidden>
+            <div class="campo-form">
+              <label for="campo-solicitar-materia-nome">Nome da matéria</label>
+              <input type="text" id="campo-solicitar-materia-nome" maxlength="200" required />
+            </div>
+            <div class="linha-botoes">
+              <button type="submit" class="btn-acesso">Enviar</button>
+              <button type="button" id="btn-cancelar-solicitar-materia" class="btn-perigo">Cancelar</button>
+            </div>
+            <p id="feedback-solicitar-materia" class="feedback-admin" role="status" aria-live="polite"></p>
+          </form>
         </div>
         <div class="campo-form">
           <label for="campo-criar-youtube">Link do vídeo (YouTube)</label>
@@ -119,6 +143,10 @@
       <h3 id="titulo-minhas">Minhas aulas</h3>
       <ul id="lista-minhas" class="lista-admin"></ul>
       <p id="minhas-vazio" class="sem-resultados" role="status" hidden>Você ainda não enviou aulas.</p>
+
+      <h3 id="titulo-minhas-solicitacoes-estrutura">Solicitações de matérias e deficiências</h3>
+      <ul id="lista-minhas-solicitacoes-estrutura" class="lista-admin"></ul>
+      <p id="minhas-solicitacoes-estrutura-vazio" class="sem-resultados" role="status" hidden>Nenhuma solicitação enviada.</p>
 
       <h3 id="titulo-moedas">🟡 EFA Coins</h3>
       <p id="saldo-usuario" class="saldo-usuario">Seu saldo: 🟡 0 EFA Coins</p>
@@ -184,6 +212,19 @@
           <div class="resumo-item"><strong id="total-materias">0</strong><span>Matérias</span></div>
           <div class="resumo-item"><strong id="total-deficiencias">0</strong><span>Deficiências</span></div>
         </div>
+      </section>
+
+      <section id="usuarios-admin" class="secao-admin" aria-labelledby="titulo-usuarios-admin">
+        <h3 id="titulo-usuarios-admin">Permissões de usuários</h3>
+        <p class="painel-intro">O Passe Especial permite criar aulas e solicitar matérias ou deficiências já aprovadas. Ele não concede acesso às funções administrativas.</p>
+        <ul id="lista-usuarios-admin" class="lista-admin"></ul>
+        <p id="usuarios-admin-vazio" class="sem-resultados" role="status" hidden>Nenhum usuário encontrado.</p>
+      </section>
+
+      <section id="solicitacoes-estrutura-admin" class="secao-admin" aria-labelledby="titulo-solicitacoes-estrutura">
+        <h3 id="titulo-solicitacoes-estrutura">Solicitações de matérias e deficiências</h3>
+        <ul id="lista-solicitacoes-estrutura-admin" class="lista-admin"></ul>
+        <p id="solicitacoes-estrutura-vazio" class="sem-resultados" role="status" hidden>Nenhuma solicitação pendente.</p>
       </section>
 
       <section id="detalhes-aula-admin" class="detalhes-admin" aria-labelledby="titulo-detalhes-aula" hidden>
