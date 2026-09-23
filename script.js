@@ -422,21 +422,14 @@ var MATERIAS_COMUNS = ["Matemática", "Português", "História", "Geografia", "C
 var MATERIAS_DISLEXIA = ["Português", "Inglês", "História"];
 
 var DEFICIENCIAS_SUGERIDAS = [
-  { nome: "Cegueira", descricao: "Deficiência visual total. Materiais em áudio, leitores de tela e descrições faladas.", materias: MATERIAS_COMUNS },
-  { nome: "Baixa visão", descricao: "Deficiência visual parcial. Ampliação de textos, alto contraste e recursos visuais ampliados.", materias: MATERIAS_COMUNS },
-  { nome: "Surdez", descricao: "Deficiência auditiva total. Legendas, vídeos em Libras e materiais visuais.", materias: MATERIAS_COMUNS },
-  { nome: "Perda auditiva", descricao: "Deficiência auditiva parcial. Legendas, transcrições e apoio visual.", materias: MATERIAS_COMUNS },
-  { nome: "Paralisia cerebral", descricao: "Deficiência física. Ritmo adaptado, navegação simplificada e apoios visuais.", materias: MATERIAS_COMUNS },
-  { nome: "Lesão medular", descricao: "Deficiência física. Materiais acessíveis com ritmo adaptado.", materias: MATERIAS_COMUNS },
-  { nome: "Amputação", descricao: "Deficiência física. Adaptações de interação e materiais simplificados.", materias: MATERIAS_COMUNS },
-  { nome: "Distrofias musculares", descricao: "Deficiência física. Conteúdos em pequenos blocos com ritmo adaptado.", materias: MATERIAS_COMUNS },
-  { nome: "Deficiência intelectual", descricao: "Conteúdos simplificados, passo a passo e linguagem objetiva.", materias: MATERIAS_COMUNS },
-  { nome: "Transtorno do Espectro Autista (TEA)", descricao: "Estruturas previsíveis, instruções claras e organização visual.", materias: MATERIAS_COMUNS },
-  { nome: "Dislexia", descricao: "Fonte amigável, áudio de apoio e linguagem direta.", materias: MATERIAS_DISLEXIA },
-  { nome: "Discalculia", descricao: "Recursos concretos e visuais para números e operações.", materias: MATERIAS_COMUNS },
-  { nome: "Disgrafia", descricao: "Atividades com menos escrita e mais recursos visuais e orais.", materias: MATERIAS_COMUNS },
-  { nome: "TDAH", descricao: "Transtorno do Déficit de Atenção com Hiperatividade. Blocos curtos e cronometrados.", materias: MATERIAS_COMUNS },
-  { nome: "Deficiência múltipla", descricao: "Associação de duas ou mais deficiências. Adaptações combinadas.", materias: MATERIAS_COMUNS }
+  { nome: "TDAH", descricao: "Transtorno do Déficit de Atenção com Hiperatividade.", materias: MATERIAS_COMUNS },
+  { nome: "Autismo", descricao: "Condição do espectro autista.", materias: MATERIAS_COMUNS },
+  { nome: "Dislexia", descricao: "Condição que pode afetar a leitura e a escrita.", materias: MATERIAS_DISLEXIA },
+  { nome: "Miopia", descricao: "Condição visual que pode exigir recursos de ampliação.", materias: MATERIAS_COMUNS },
+  { nome: "Surdo", descricao: "Condição relacionada à surdez.", materias: MATERIAS_COMUNS },
+  { nome: "Mudo", descricao: "Condição relacionada à comunicação oral.", materias: MATERIAS_COMUNS },
+  { nome: "Analfabetos", descricao: "Necessidade educacional relacionada à alfabetização.", materias: MATERIAS_COMUNS },
+  { nome: "Neurotópicos", descricao: "Perfil de aprendizagem neurotípico.", materias: MATERIAS_COMUNS }
 ];
 
 function obterDadosUsuarioAutenticado(usuario) {
