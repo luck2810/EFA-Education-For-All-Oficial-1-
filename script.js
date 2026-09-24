@@ -970,8 +970,11 @@ function popularMaterias(select, deficienciaId, textoPadrao, lista, valorAtual) 
   padrao.value = "";
   padrao.textContent = textoPadrao;
   select.appendChild(padrao);
+  var nomesAdicionados = {};
   lista.forEach(function (materia) {
-    if (deficienciaId && materia.deficienciaIds.indexOf(deficienciaId) === -1) return;
+    var nomeNormalizado = normalizarNomeEstrutura(materia.nome);
+    if (nomesAdicionados[nomeNormalizado]) return;
+    nomesAdicionados[nomeNormalizado] = true;
     var opcao = document.createElement("option");
     opcao.value = materia.id;
     opcao.textContent = materia.nome;
@@ -1225,7 +1228,9 @@ function renderizarAulas() {
     var deficienciaSelecionada = nomeDaDeficiencia(deficienciaId);
     var encontrouDeficiencia = !deficienciaId || aula.deficienciaId === deficienciaId ||
       (!aula.deficienciaId && normalizar(aula.etiqueta || ETIQUETAS[aula.perfil]) === normalizar(deficienciaSelecionada));
-    var encontrouMateria = !materiaId || aula.materiaId === materiaId;
+    var materiaSelecionada = nomeDaMateria(materiaId);
+    var encontrouMateria = !materiaId || aula.materiaId === materiaId ||
+      (!!aula.materiaNome && normalizar(aula.materiaNome) === normalizar(materiaSelecionada));
     return encontrouTexto && encontrouDeficiencia && encontrouMateria;
   });
 
@@ -2318,12 +2323,8 @@ function cadastrarDeficienciasSugeridas() {
       return a === b || a.indexOf(b) !== -1 || b.indexOf(a) !== -1;
     })[0];
 
-    var deficienciaId;
-    if (existente) {
-      deficienciaId = existente.id;
-    } else {
+    if (!existente) {
       var refNova = banco.collection("deficiencias").doc();
-      deficienciaId = refNova.id;
       lote.set(refNova, {
         nome: sugerida.nome,
         descricao: sugerida.descricao,
@@ -2336,23 +2337,31 @@ function cadastrarDeficienciasSugeridas() {
       novasDeficiencias++;
     }
 
-    sugerida.materias.forEach(function (nomeMateria, indice) {
-      var jaExiste = TODAS_MATERIAS.some(function (materia) {
-        return materia.deficienciaIds.indexOf(deficienciaId) !== -1 && normalizar(materia.nome) === normalizar(nomeMateria);
+  });
+
+  var nomesMaterias = [];
+  DEFICIENCIAS_SUGERIDAS.forEach(function (sugerida) {
+    sugerida.materias.forEach(function (nomeMateria) {
+      var jaListada = nomesMaterias.some(function (nomeExistente) {
+        return normalizarNomeEstrutura(nomeExistente) === normalizarNomeEstrutura(nomeMateria);
       });
-      if (jaExiste) return;
-      lote.set(banco.collection("materias").doc(), {
-        nome: nomeMateria,
-        deficienciaId: deficienciaId,
-        deficienciaIds: [deficienciaId],
-        ativa: true,
-        status: "aprovada",
-        criadoPor: usuarioAtual.uid,
-        ordem: indice + 1,
-        criadoEm: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      novasMaterias++;
+      if (!jaListada) nomesMaterias.push(nomeMateria);
     });
+  });
+  nomesMaterias.forEach(function (nomeMateria, indice) {
+    var jaExiste = TODAS_MATERIAS.some(function (materia) {
+      return normalizarNomeEstrutura(materia.nome) === normalizarNomeEstrutura(nomeMateria);
+    });
+    if (jaExiste) return;
+    lote.set(banco.collection("materias").doc(), {
+      nome: nomeMateria,
+      ativa: true,
+      status: "aprovada",
+      criadoPor: usuarioAtual.uid,
+      ordem: indice + 1,
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    novasMaterias++;
   });
 
   if (!novasDeficiencias && !novasMaterias) {
@@ -2431,17 +2440,8 @@ function solicitarDeficiencia(evento) {
 function solicitarMateria(evento) {
   evento.preventDefault();
   var campo = document.getElementById("campo-solicitar-materia-nome");
-  var deficiencia = document.getElementById("campo-criar-deficiencia");
   if (!campo) return;
-  var ids = deficiencia && deficiencia.value && deficiencia.value !== "__solicitar__" ? [deficiencia.value] : [];
-  if (!ids.length) {
-    alert("Selecione primeiro a deficiência vinculada à matéria.");
-    return;
-  }
-  solicitarEstrutura("materia", campo.value, {
-    deficienciaIds: ids,
-    deficienciaId: ids[0]
-  }, "feedback-solicitar-materia").then(function () {
+  solicitarEstrutura("materia", campo.value, {}, "feedback-solicitar-materia").then(function () {
     campo.value = "";
     fecharSolicitacaoEstrutura("materia");
   });
@@ -2683,10 +2683,6 @@ function salvarMateria(evento) {
     alert("Informe o nome da matéria.");
     return;
   }
-  if (!deficienciaIds.length) {
-    alert("Vincule a matéria a pelo menos uma deficiência.");
-    return;
-  }
 
   var ordem = parseInt(campoOrdem.value, 10);
   if (isNaN(ordem)) {
@@ -2695,22 +2691,22 @@ function salvarMateria(evento) {
 
   var dados = {
     nome: nome,
-    deficienciaIds: deficienciaIds,
-    deficienciaId: deficienciaIds[0],
     ativa: campoAtiva.checked,
     status: "aprovada",
     criadoPor: usuarioAtual.uid,
     ordem: ordem
   };
+  if (deficienciaIds.length) {
+    dados.deficienciaIds = deficienciaIds;
+    dados.deficienciaId = deficienciaIds[0];
+  }
 
   var banco = firebase.firestore();
   var operacao = banco.collection("materias").get().then(function (resultado) {
     var duplicada = resultado.docs.some(function (documento) {
       var existente = documento.data();
-      var ids = Array.isArray(existente.deficienciaIds) ? existente.deficienciaIds : (existente.deficienciaId ? [existente.deficienciaId] : []);
       return documento.id !== materiaEmEdicao
-        && normalizarNomeEstrutura(existente.nome) === normalizarNomeEstrutura(nome)
-        && deficienciaIds.some(function (id) { return ids.indexOf(id) !== -1; });
+        && normalizarNomeEstrutura(existente.nome) === normalizarNomeEstrutura(nome);
     });
     if (duplicada) throw { code: "duplicate-structure" };
     return materiaEmEdicao
@@ -2723,7 +2719,7 @@ function salvarMateria(evento) {
     alert("✅ Matéria salva.");
   }).catch(function (erro) {
     if (erro && erro.code === "duplicate-structure") {
-      alert("Já existe uma matéria com esse nome em uma das deficiências selecionadas.");
+      alert("Já existe uma matéria com esse nome.");
       return;
     }
     console.error("Erro ao salvar matéria:", erro);
@@ -2778,8 +2774,13 @@ function renderizarMaterias() {
   if (!lista) return;
   lista.innerHTML = "";
   var deficienciaFiltro = filtro ? filtro.value : "";
+  var nomesExibidos = {};
   var visiveis = TODAS_MATERIAS.filter(function (materia) {
-    return !deficienciaFiltro || materia.deficienciaIds.indexOf(deficienciaFiltro) !== -1;
+    var nomeNormalizado = normalizarNomeEstrutura(materia.nome);
+    if (nomesExibidos[nomeNormalizado]) return false;
+    if (deficienciaFiltro && materia.deficienciaIds.length && materia.deficienciaIds.indexOf(deficienciaFiltro) === -1) return false;
+    nomesExibidos[nomeNormalizado] = true;
+    return true;
   });
   visiveis.forEach(function (materia) {
     var item = document.createElement("li");
