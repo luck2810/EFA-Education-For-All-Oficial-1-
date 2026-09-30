@@ -93,7 +93,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'titulo', 'descricao', 'deficienciaId', 'deficienciaNome',
             'materiaId', 'materiaNome', 'etiqueta', 'youtube', 'documento',
-            'status', 'motivoRejeicao'
+            'pdfUrl', 'pdfNome', 'pdfPath', 'gratuita', 'status', 'motivoRejeicao'
           ])
           && (
             (ehPasseEspecial() && request.resource.data.status == 'aprovada')

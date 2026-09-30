@@ -31,6 +31,7 @@ var materiaEmEdicao = null;       // id da matéria em edição
 var firebasePronto = false;
 var ouvintesUsuario = [];
 var ouvintesEstrutura = [];
+var PDF_MAX_BYTES = 5 * 1024 * 1024;
 
 // Aulas iniciais: reserva caso o banco esteja inacessível (sem internet ou sem Firebase).
 var AULAS_INICIAIS = [
@@ -506,6 +507,56 @@ function ehProfessorEspecial() {
   return !!(usuarioAtual && passeEspecialAtual);
 }
 
+function atualizarOpcaoGratuita() {
+  var wrap = document.getElementById("campo-gratuita-wrap");
+  var checkbox = document.getElementById("campo-aula-gratuita");
+  if (!wrap || !checkbox) return;
+  var visivel = !!(usuarioAtual && ehProfessorEspecial());
+  wrap.hidden = !visivel;
+  if (!visivel) checkbox.checked = false;
+}
+
+function atualizarNomeArquivoPdf(inputId, nomeId, textoPadrao) {
+  var input = document.getElementById(inputId);
+  var nome = document.getElementById(nomeId);
+  if (!input || !nome) return;
+  var arquivo = input.files && input.files.length ? input.files[0] : null;
+  if (!arquivo) {
+    nome.textContent = textoPadrao;
+    return;
+  }
+  nome.textContent = arquivo.name;
+}
+
+function validarPdfArquivo(arquivo) {
+  if (!arquivo) return { valido: true, arquivo: null };
+  if (arquivo.type && !/pdf/i.test(arquivo.type)) {
+    return { valido: false, mensagem: "Selecione somente arquivos PDF para anexar à aula." };
+  }
+  if (arquivo.size > PDF_MAX_BYTES) {
+    return { valido: false, mensagem: "O PDF excedeu o limite de 5 MB. Escolha um arquivo menor." };
+  }
+  return { valido: true, arquivo: arquivo };
+}
+
+function subirPdfSeNecessario(arquivo, uid) {
+  if (!arquivo) return Promise.resolve({ pdfUrl: "", pdfNome: "", pdfPath: "" });
+  if (!firebasePronto || !firebase.storage || !firebase.storage()) {
+    return Promise.reject(new Error("Firebase Storage não está disponível."));
+  }
+  var nomeArquivo = "aulas/" + uid + "/" + Date.now() + "_" + String(arquivo.name || "arquivo.pdf").replace(/\s+/g, "_");
+  var ref = firebase.storage().ref().child(nomeArquivo);
+  return ref.put(arquivo).then(function (snapshot) {
+    return snapshot.ref.getDownloadURL().then(function (url) {
+      return {
+        pdfUrl: url,
+        pdfNome: arquivo.name || "arquivo.pdf",
+        pdfPath: snapshot.ref.fullPath || nomeArquivo
+      };
+    });
+  });
+}
+
 function adicionarOpcaoSolicitar(select, texto) {
   if (!select || ehAdministrador(usuarioAtual) || ehProfessorEspecial()) return;
   var opcao = document.createElement("option");
@@ -578,6 +629,10 @@ function paraAula(doc) {
     materiaNome: dados.materiaNome || "",
     youtube: dados.youtube || "",
     documento: dados.documento || "",
+    pdfUrl: dados.pdfUrl || "",
+    pdfNome: dados.pdfNome || "",
+    pdfPath: dados.pdfPath || "",
+    gratuita: !!dados.gratuita,
     autorId: dados.autorId || "",
     autorNome: dados.autorNome || "",
     status: dados.status || "pendente",
@@ -636,6 +691,11 @@ function paraUsuario(doc) {
     nome: dados.nome || "Usuário",
     email: dados.email || "",
     passeEspecial: dados.passeEspecial === true,
+    premium: dados.premium === true,
+    premiumStatus: dados.premiumStatus || (dados.premium ? "ativo" : "inativo"),
+    premiumStartedAt: dados.premiumStartedAt || null,
+    premiumExpiresAt: dados.premiumExpiresAt || null,
+    premiumAte: dados.premiumAte || null,
     criadoEm: dados.criadoEm || null
   };
 }
@@ -707,6 +767,14 @@ function atualizarAcessoPainelAdmin(admin) {
   if (linkPainel) linkPainel.hidden = !admin;
 }
 
+function premiumAtivoParaDados(dados) {
+  if (!dados || dados.premium !== true) return false;
+  if (dados.premiumAte && typeof dados.premiumAte.toDate === "function") {
+    return dados.premiumAte.toDate().getTime() > Date.now();
+  }
+  return !!(dados.premiumExpiresAt && typeof dados.premiumExpiresAt.toDate === "function" && dados.premiumExpiresAt.toDate().getTime() > Date.now());
+}
+
 // ---------- Sessão do usuário ----------
 function configurarSessao(usuario) {
   encerrarOuvintesUsuario();
@@ -766,6 +834,7 @@ function configurarSessao(usuario) {
         email: usuario.email,
         moedas: 0,
         premium: false,
+        premiumStatus: "inativo",
         passeEspecial: false,
         premiumAte: null,
         criadoEm: firebase.firestore.FieldValue.serverTimestamp()
@@ -777,7 +846,8 @@ function configurarSessao(usuario) {
     var dados = doc.data();
     passeEspecialAtual = dados.passeEspecial === true;
     saldoMoedas = Number(dados.moedas || 0);
-    premiumAtivo = !!(dados.premium && dados.premiumAte && dados.premiumAte.toMillis && dados.premiumAte.toMillis() > Date.now());
+    premiumAtivo = premiumAtivoParaDados(dados);
+    atualizarOpcaoGratuita();
     atualizarPainelUsuario();
     atualizarSelects();
     renderizarAulas();
@@ -1082,6 +1152,7 @@ function ehMinhaAula(aula) {
 function aulaAcessivel(aula) {
   if (aula.semBloqueio) return true;
   if (ehMinhaAula(aula)) return true;
+  if (aula.gratuita === true) return true;
   return premiumAtivo || idsDesbloqueadas[aula.id] === true;
 }
 
@@ -1124,6 +1195,13 @@ function criarCard(aula) {
     card.appendChild(seloAutor);
   }
 
+  if (aula.gratuita === true) {
+    var seloGratis = document.createElement("span");
+    seloGratis.className = "badge-sua-aula";
+    seloGratis.textContent = "🆓 Gratuita";
+    card.appendChild(seloGratis);
+  }
+
   var descricao = document.createElement("p");
   descricao.textContent = aula.descricao;
   card.appendChild(descricao);
@@ -1145,6 +1223,16 @@ function criarCard(aula) {
     linkDoc.target = "_blank";
     linkDoc.rel = "noopener noreferrer";
     linkDoc.textContent = "📄 Material adaptado";
+
+    if (aula.pdfUrl) {
+      var linkPdf = document.createElement("a");
+      linkPdf.className = "btn-acesso";
+      linkPdf.href = aula.pdfUrl;
+      linkPdf.target = "_blank";
+      linkPdf.rel = "noopener noreferrer";
+      linkPdf.textContent = "📄 Abrir PDF";
+      acoes.appendChild(linkPdf);
+    }
 
     acoes.appendChild(linkVideo);
     acoes.appendChild(linkDoc);
@@ -1247,6 +1335,7 @@ function desbloquearAula(aula) {
     alert("Entre com o Google para desbloquear aulas.");
     return;
   }
+  if (aula.gratuita === true) return;
   // O criador da aula nunca é cobrado (verificação de verdade, não só no botão)
   if (ehMinhaAula(aula)) return;
   if (premiumAtivo || idsDesbloqueadas[aula.id]) return;
@@ -1300,6 +1389,8 @@ function enviarAulaAnalise(evento) {
   var campoMateria = document.getElementById("campo-criar-materia");
   var campoYoutube = document.getElementById("campo-criar-youtube");
   var campoDocumento = document.getElementById("campo-criar-documento");
+  var campoPdf = document.getElementById("campo-criar-pdf");
+  var campoGratuita = document.getElementById("campo-aula-gratuita");
   if (!campoTitulo || !campoDescricao || !campoDeficiencia || !campoMateria || !campoYoutube || !campoDocumento) {
     alert("Não foi possível localizar os campos do formulário.");
     return;
@@ -1317,6 +1408,14 @@ function enviarAulaAnalise(evento) {
     return;
   }
 
+  var arquivoPdf = campoPdf && campoPdf.files && campoPdf.files.length ? campoPdf.files[0] : null;
+  var validacaoPdf = validarPdfArquivo(arquivoPdf);
+  if (!validacaoPdf.valido) {
+    alert(validacaoPdf.mensagem);
+    return;
+  }
+
+  var aulaAtual = MINHAS_AULAS.filter(function (item) { return item.id === minhaAulaEmEdicao; })[0];
   var dados = {
     titulo: campoTitulo.value.trim(),
     descricao: campoDescricao.value.trim(),
@@ -1327,6 +1426,10 @@ function enviarAulaAnalise(evento) {
     etiqueta: nomeDaDeficiencia(deficienciaId),
     youtube: campoYoutube.value.trim(),
     documento: campoDocumento.value.trim(),
+    pdfUrl: aulaAtual ? (aulaAtual.pdfUrl || "") : "",
+    pdfNome: aulaAtual ? (aulaAtual.pdfNome || "") : "",
+    pdfPath: aulaAtual ? (aulaAtual.pdfPath || "") : "",
+    gratuita: !!(campoGratuita && campoGratuita.checked && ehProfessorEspecial()),
     autorId: usuarioAtual.uid,
     autorNome: usuarioAtual.displayName || usuarioAtual.email,
     status: ehAdministrador(usuarioAtual) || ehProfessorEspecial() ? "aprovada" : "pendente",
@@ -1346,56 +1449,76 @@ function enviarAulaAnalise(evento) {
   var botaoEnviar = evento.submitter;
   if (botaoEnviar) botaoEnviar.disabled = true;
 
-  firebase.firestore().collection("aulas")
-    .where("autorId", "==", usuarioAtual.uid)
-    .get().then(function (resultado) {
-    var duplicada = resultado.docs.some(function (documento) {
-      if (documento.id === minhaAulaEmEdicao) return false;
-      var existente = documento.data();
-      return normalizar(existente.titulo) === normalizar(dados.titulo);
+  Promise.resolve()
+    .then(function () {
+      if (!arquivoPdf) return { pdfUrl: dados.pdfUrl, pdfNome: dados.pdfNome, pdfPath: dados.pdfPath };
+      return subirPdfSeNecessario(arquivoPdf, usuarioAtual.uid);
+    })
+    .then(function (pdfSalvo) {
+      if (pdfSalvo && (pdfSalvo.pdfUrl || pdfSalvo.pdfNome || pdfSalvo.pdfPath)) {
+        dados.pdfUrl = pdfSalvo.pdfUrl || dados.pdfUrl;
+        dados.pdfNome = pdfSalvo.pdfNome || dados.pdfNome;
+        dados.pdfPath = pdfSalvo.pdfPath || dados.pdfPath;
+      }
+      return firebase.firestore().collection("aulas")
+        .where("autorId", "==", usuarioAtual.uid)
+        .get();
+    })
+    .then(function (resultado) {
+      var duplicada = resultado.docs.some(function (documento) {
+        if (documento.id === minhaAulaEmEdicao) return false;
+        var existente = documento.data();
+        return normalizar(existente.titulo) === normalizar(dados.titulo);
+      });
+      if (duplicada) {
+        throw { code: "duplicate-submission" };
+      }
+      if (minhaAulaEmEdicao) {
+        var dadosEdicao = {
+          titulo: dados.titulo,
+          descricao: dados.descricao,
+          deficienciaId: dados.deficienciaId,
+          deficienciaNome: dados.deficienciaNome,
+          materiaId: dados.materiaId,
+          materiaNome: dados.materiaNome,
+          etiqueta: dados.etiqueta,
+          youtube: dados.youtube,
+          documento: dados.documento,
+          pdfUrl: dados.pdfUrl,
+          pdfNome: dados.pdfNome,
+          pdfPath: dados.pdfPath,
+          gratuita: !!dados.gratuita,
+          status: dados.status,
+          motivoRejeicao: ""
+        };
+        return firebase.firestore().collection("aulas").doc(minhaAulaEmEdicao).update(dadosEdicao);
+      }
+      return firebase.firestore().collection("aulas").add(dados);
+    }).then(function () {
+      var feedback = document.getElementById("feedback-criar");
+      if (feedback) {
+        feedback.textContent = dados.status === "aprovada"
+          ? "✅ Aula criada e aprovada diretamente."
+          : "✅ Aula enviada para análise! Você receberá 🟡 1 EFA Coin quando ela for aprovada.";
+      }
+      var formulario = document.getElementById("form-criar-aula");
+      if (formulario) formulario.reset();
+      atualizarNomeArquivoPdf("campo-criar-pdf", "info-pdf-aula", "Nenhum PDF selecionado. Máximo: 5 MB.");
+      if (campoGratuita) campoGratuita.checked = false;
+      atualizarOpcaoGratuita();
+      minhaAulaEmEdicao = null;
+      if (botaoEnviar) botaoEnviar.textContent = "📤 Enviar para análise";
+      atualizarSelects();
+    }).catch(function (erro) {
+      console.error("Erro ao enviar aula:", erro);
+      alert(erro && erro.code === "duplicate-submission"
+        ? "Você já enviou uma aula com este título."
+        : erro && erro.code === "permission-denied"
+        ? "Permissão negada pelo Firestore. Confira as regras de segurança."
+        : "Não foi possível enviar a aula. " + (erro && erro.message ? "Detalhe: " + erro.message : "Tente novamente."));
+    }).finally(function () {
+      if (botaoEnviar) botaoEnviar.disabled = false;
     });
-    if (duplicada) {
-      throw { code: "duplicate-submission" };
-    }
-    if (minhaAulaEmEdicao) {
-      var dadosEdicao = {
-        titulo: dados.titulo,
-        descricao: dados.descricao,
-        deficienciaId: dados.deficienciaId,
-        deficienciaNome: dados.deficienciaNome,
-        materiaId: dados.materiaId,
-        materiaNome: dados.materiaNome,
-        etiqueta: dados.etiqueta,
-        youtube: dados.youtube,
-        documento: dados.documento,
-        status: dados.status,
-        motivoRejeicao: ""
-      };
-      return firebase.firestore().collection("aulas").doc(minhaAulaEmEdicao).update(dadosEdicao);
-    }
-    return firebase.firestore().collection("aulas").add(dados);
-  }).then(function () {
-    var feedback = document.getElementById("feedback-criar");
-    if (feedback) {
-      feedback.textContent = dados.status === "aprovada"
-        ? "✅ Aula criada e aprovada diretamente."
-        : "✅ Aula enviada para análise! Você receberá 🟡 1 EFA Coin quando ela for aprovada.";
-    }
-    var formulario = document.getElementById("form-criar-aula");
-    if (formulario) formulario.reset();
-    minhaAulaEmEdicao = null;
-    if (botaoEnviar) botaoEnviar.textContent = "📤 Enviar para análise";
-    atualizarSelects();
-  }).catch(function (erro) {
-    console.error("Erro ao enviar aula:", erro);
-    alert(erro && erro.code === "duplicate-submission"
-      ? "Você já enviou uma aula com este título."
-      : erro && erro.code === "permission-denied"
-      ? "Permissão negada pelo Firestore. Confira as regras de segurança."
-      : "Não foi possível enviar a aula. " + (erro && erro.message ? "Detalhe: " + erro.message : "Tente novamente."));
-  }).finally(function () {
-    if (botaoEnviar) botaoEnviar.disabled = false;
-  });
 }
 
 // ---------- Selos de status ----------
@@ -1473,17 +1596,23 @@ function iniciarEdicaoMinhaAula(aula) {
     deficiencia: document.getElementById("campo-criar-deficiencia"),
     materia: document.getElementById("campo-criar-materia"),
     youtube: document.getElementById("campo-criar-youtube"),
-    documento: document.getElementById("campo-criar-documento")
+    documento: document.getElementById("campo-criar-documento"),
+    pdf: document.getElementById("campo-criar-pdf"),
+    gratuidade: document.getElementById("campo-aula-gratuita")
   };
   if (!campos.titulo || !campos.descricao) return;
   campos.titulo.value = aula.titulo;
   campos.descricao.value = aula.descricao;
   campos.youtube.value = aula.youtube;
   campos.documento.value = aula.documento;
+  if (campos.gratuidade) campos.gratuidade.checked = !!aula.gratuita;
+  if (campos.pdf) campos.pdf.value = "";
+  atualizarNomeArquivoPdf("campo-criar-pdf", "info-pdf-aula", aula.pdfNome ? "PDF atual: " + aula.pdfNome : "Nenhum PDF anexado. Máximo: 5 MB.");
   atualizarSelects();
   campos.deficiencia.value = aula.deficienciaId || "";
   popularMaterias(campos.materia, campos.deficiencia.value, "Selecione a matéria", MATERIAS);
   campos.materia.value = aula.materiaId || "";
+  atualizarOpcaoGratuita();
   var botao = document.getElementById("btn-enviar-aula");
   if (botao) botao.textContent = ehProfessorEspecial() ? "💾 Salvar aula aprovada" : "💾 Salvar e reenviar para análise";
   document.getElementById("form-criar-aula").scrollIntoView({ behavior: "smooth" });
@@ -1547,49 +1676,55 @@ function criarSolicitacaoPremium(evento) {
   if (botao) botao.disabled = true;
 
   var banco = firebase.firestore();
-  banco.collection("solicitacoes_pagamento")
-    .where("userId", "==", usuarioAtual.uid)
-    .get()
-    .then(function (resultado) {
-      var existePendente = resultado.docs.some(function (documento) {
-        return documento.data().status === "pendente";
-      });
-      if (existePendente) {
-        throw { code: "pending-payment-request" };
-      }
-      return banco.collection("solicitacoes_pagamento").add({
-        userId: usuarioAtual.uid,
-        userEmail: emailInformado,
-        userName: campoNome.value.trim(),
-        plano: "premium_30_dias",
-        valor: PRECO_PREMIUM,
-        chavePix: CHAVE_PIX_EFA,
-        status: "pendente",
-        criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
-        atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
-        analisadoPor: "",
-        analisadoEm: null,
-        motivoRecusa: "",
-        observacaoUsuario: campoObservacao.value.trim(),
-        identificadorTransacao: campoTransacao.value.trim()
-      });
-    })
-    .then(function () {
-      var formulario = document.getElementById("form-solicitar-premium");
-      if (formulario) formulario.reset();
-      if (feedback) feedback.textContent = "Solicitação enviada. Aguarde a conferência do administrador.";
-    })
-    .catch(function (erro) {
-      if (erro && erro.code === "pending-payment-request") {
-        if (feedback) feedback.textContent = "Já existe uma solicitação pendente para sua conta.";
-        return;
-      }
-      console.error("Erro ao criar solicitação Premium:", erro);
-      if (feedback) feedback.textContent = "Não foi possível enviar a solicitação. Tente novamente.";
-    })
-    .finally(function () {
-      if (botao) botao.disabled = false;
+  banco.collection("usuarios").doc(usuarioAtual.uid).get().then(function (documento) {
+    var dadosUsuario = documento.exists ? documento.data() : {};
+    if (dadosUsuario.premium === true || premiumAtivoParaDados(dadosUsuario) || premiumAtivo) {
+      throw { code: "already-premium" };
+    }
+    return banco.collection("solicitacoes_pagamento")
+      .where("userId", "==", usuarioAtual.uid)
+      .get();
+  }).then(function (resultado) {
+    var existePendente = resultado.docs.some(function (documento) {
+      return documento.data().status === "pendente";
     });
+    if (existePendente) {
+      throw { code: "pending-payment-request" };
+    }
+    return banco.collection("solicitacoes_pagamento").add({
+      userId: usuarioAtual.uid,
+      userEmail: emailInformado,
+      userName: campoNome.value.trim(),
+      plano: "premium_30_dias",
+      valor: PRECO_PREMIUM,
+      chavePix: CHAVE_PIX_EFA,
+      status: "pendente",
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      analisadoPor: "",
+      analisadoEm: null,
+      motivoRecusa: "",
+      observacaoUsuario: campoObservacao.value.trim(),
+      identificadorTransacao: campoTransacao.value.trim()
+    });
+  }).then(function () {
+    var formulario = document.getElementById("form-solicitar-premium");
+    if (formulario) formulario.reset();
+    if (feedback) feedback.textContent = "Solicitação enviada. Aguarde a conferência do administrador.";
+  }).catch(function (erro) {
+    if (erro && erro.code === "pending-payment-request") {
+      if (feedback) feedback.textContent = "Já existe uma solicitação pendente para sua conta.";
+      return;
+    }
+    if (erro && erro.code === "already-premium") {
+      if (feedback) feedback.textContent = "Você já possui o Premium.";
+      return;
+    }
+    console.error("Erro ao criar solicitação Premium:", erro);
+    if (feedback) feedback.textContent = "Não foi possível enviar a solicitação. Tente novamente.";
+  }).finally(function () {
+    if (botao) botao.disabled = false;
+  });
 }
 
 function textoStatusSolicitacao(status) {
@@ -2076,6 +2211,7 @@ function salvarAula(evento) {
   var campoMateria = document.getElementById("campo-materia");
   var campoYoutube = document.getElementById("campo-youtube");
   var campoDocumento = document.getElementById("campo-documento");
+  var campoPdfAdmin = document.getElementById("campo-pdf-admin");
   if (!campoTitulo || !campoDescricao || !campoDeficiencia || !campoMateria || !campoYoutube || !campoDocumento) {
     alert("Não foi possível localizar os campos da aula.");
     return;
@@ -2088,6 +2224,13 @@ function salvarAula(evento) {
     return;
   }
 
+  var arquivoPdf = campoPdfAdmin && campoPdfAdmin.files && campoPdfAdmin.files.length ? campoPdfAdmin.files[0] : null;
+  var validacaoPdf = validarPdfArquivo(arquivoPdf);
+  if (!validacaoPdf.valido) {
+    alert(validacaoPdf.mensagem);
+    return;
+  }
+
   var dados = {
     titulo: campoTitulo.value.trim(),
     descricao: campoDescricao.value.trim(),
@@ -2097,7 +2240,8 @@ function salvarAula(evento) {
     materiaNome: nomeDaMateria(materiaId),
     etiqueta: nomeDaDeficiencia(deficienciaId),
     youtube: campoYoutube.value.trim(),
-    documento: campoDocumento.value.trim()
+    documento: campoDocumento.value.trim(),
+    gratuita: false
   };
 
   if (!dados.titulo || !dados.descricao || !dados.youtube || !dados.documento) {
@@ -2106,21 +2250,34 @@ function salvarAula(evento) {
   }
 
   var banco = firebase.firestore();
-  var operacao;
-  if (aulaEmEdicao) {
-    // Edição: preserva status e autor
-    operacao = banco.collection("aulas").doc(aulaEmEdicao).set(dados, { merge: true });
-  } else {
-    // Aula criada pelo administrador entra já aprovada (ele é o revisor)
+  var operacao = Promise.resolve().then(function () {
+    if (!arquivoPdf) return null;
+    if (!firebasePronto || !firebase.storage) {
+      throw new Error("Firebase Storage não está disponível.");
+    }
+    return subirPdfSeNecessario(arquivoPdf, usuarioAtual ? usuarioAtual.uid : "admin");
+  }).then(function (pdfSalvo) {
+    if (pdfSalvo && (pdfSalvo.pdfUrl || pdfSalvo.pdfNome || pdfSalvo.pdfPath)) {
+      dados.pdfUrl = pdfSalvo.pdfUrl || "";
+      dados.pdfNome = pdfSalvo.pdfNome || "";
+      dados.pdfPath = pdfSalvo.pdfPath || "";
+    }
+    if (aulaEmEdicao) {
+      return banco.collection("aulas").doc(aulaEmEdicao).set(dados, { merge: true });
+    }
     var usuario = firebase.auth().currentUser;
     dados.autorId = usuario ? usuario.uid : "";
     dados.autorNome = usuario ? (usuario.displayName || usuario.email) : "";
     dados.status = "aprovada";
     dados.criadoEm = firebase.firestore.FieldValue.serverTimestamp();
-    operacao = banco.collection("aulas").add(dados);
-  }
+    return banco.collection("aulas").add(dados);
+  });
+
   operacao.then(function () {
     cancelarEdicao();
+    var infoAdmin = document.getElementById("info-pdf-admin");
+    if (infoAdmin) infoAdmin.textContent = "Nenhum PDF novo selecionado.";
+    if (campoPdfAdmin) campoPdfAdmin.value = "";
   }).catch(function (erro) {
     console.error("Erro ao salvar aula:", erro);
     alert("Não foi possível salvar a aula. " + (erro && erro.message ? "Detalhe: " + erro.message : "Verifique as regras do Firestore."));
@@ -2539,6 +2696,12 @@ function renderizarUsuariosAdmin() {
     email.className = "item-meta";
     email.textContent = "E-mail: " + (usuario.email || "não informado") + " · UID: " + usuario.id;
     item.appendChild(email);
+    if (usuario.premium || usuario.premiumStatus === "ativo") {
+      var premium = document.createElement("p");
+      premium.className = "item-meta";
+      premium.textContent = "Premium: ativo" + (usuario.premiumAte ? " · expira em " + formatarData(usuario.premiumAte) : "");
+      item.appendChild(premium);
+    }
     var label = document.createElement("label");
     label.className = "campo-linha";
     var checkbox = document.createElement("input");
@@ -2551,6 +2714,67 @@ function renderizarUsuariosAdmin() {
     lista.appendChild(item);
   });
   if (aviso) aviso.hidden = TODOS_USUARIOS.length !== 0;
+  renderizarPremiumAdmin();
+}
+
+function desativarPremiumUsuario(usuario) {
+  if (!ehAdministrador(usuarioAtual)) return;
+  if (!confirm("Desativar o Premium deste usuário? Esta ação não remove dados do perfil, apenas desativa o acesso Premium.")) return;
+  firebase.firestore().collection("usuarios").doc(usuario.id).update({
+    premium: false,
+    premiumStatus: "desativado",
+    premiumAte: null,
+    premiumExpiresAt: null,
+    premiumUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    premiumUpdatedBy: usuarioAtual.uid
+  }).then(function () {
+    alert("Premium desativado com sucesso.");
+  }).catch(function (erro) {
+    console.error("Erro ao desativar Premium:", erro);
+    alert("Não foi possível desativar o Premium. Verifique as regras do Firestore.");
+  });
+}
+
+function renderizarPremiumAdmin() {
+  var lista = document.getElementById("lista-premium-admin");
+  var aviso = document.getElementById("premium-admin-vazio");
+  if (!lista) return;
+  lista.innerHTML = "";
+  var premiumUsuarios = TODOS_USUARIOS.filter(function (usuario) {
+    return usuario.premium || usuario.premiumStatus === "ativo" || (usuario.premiumAte && usuario.premiumAte.toDate && usuario.premiumAte.toDate().getTime() > Date.now());
+  });
+  premiumUsuarios.forEach(function (usuario) {
+    var item = document.createElement("li");
+    item.className = "item-admin";
+    var titulo = document.createElement("strong");
+    titulo.textContent = usuario.nome || usuario.email || "Usuário Premium";
+    item.appendChild(titulo);
+    var email = document.createElement("p");
+    email.className = "item-meta";
+    email.textContent = "E-mail: " + (usuario.email || "não informado");
+    item.appendChild(email);
+    var status = document.createElement("p");
+    status.className = "item-meta";
+    status.textContent = "Status: " + (usuario.premiumStatus || (usuario.premium ? "ativo" : "inativo"));
+    item.appendChild(status);
+    if (usuario.premiumAte && usuario.premiumAte.toDate) {
+      var expiracao = document.createElement("p");
+      expiracao.className = "item-meta";
+      expiracao.textContent = "Expira em: " + formatarData(usuario.premiumAte);
+      item.appendChild(expiracao);
+    }
+    var acoes = document.createElement("div");
+    acoes.className = "item-admin-acoes";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-mini excluir";
+    btn.textContent = "Desativar Premium";
+    btn.addEventListener("click", function () { desativarPremiumUsuario(usuario); });
+    acoes.appendChild(btn);
+    item.appendChild(acoes);
+    lista.appendChild(item);
+  });
+  if (aviso) aviso.hidden = premiumUsuarios.length !== 0;
 }
 
 function atualizarSolicitacaoEstrutura(solicitacao, aprovar) {
@@ -2904,6 +3128,19 @@ document.addEventListener("DOMContentLoaded", function () {
   // Criar aula (usuário)
   var formCriar = document.getElementById("form-criar-aula");
   if (formCriar) formCriar.addEventListener("submit", enviarAulaAnalise);
+  var campoPdfAula = document.getElementById("campo-criar-pdf");
+  if (campoPdfAula) {
+    campoPdfAula.addEventListener("change", function () {
+      atualizarNomeArquivoPdf("campo-criar-pdf", "info-pdf-aula", "Nenhum PDF selecionado. Máximo: 5 MB.");
+    });
+  }
+  var campoPdfAdmin = document.getElementById("campo-pdf-admin");
+  if (campoPdfAdmin) {
+    campoPdfAdmin.addEventListener("change", function () {
+      var info = document.getElementById("info-pdf-admin");
+      if (info) info.textContent = campoPdfAdmin.files && campoPdfAdmin.files.length ? campoPdfAdmin.files[0].name : "Nenhum PDF novo selecionado.";
+    });
+  }
   var campoCriarDeficiencia = document.getElementById("campo-criar-deficiencia");
   if (campoCriarDeficiencia) {
     campoCriarDeficiencia.addEventListener("change", function () {

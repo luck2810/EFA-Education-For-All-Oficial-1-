@@ -96,17 +96,6 @@
             <option value="">Selecione a deficiência</option>
           </select>
           <button type="button" id="btn-solicitar-deficiencia" class="btn-mini">➕ Adicionar nova deficiência</button>
-          <form id="form-solicitar-deficiencia" class="form-solicitacao-estrutura" hidden>
-            <div class="campo-form">
-              <label for="campo-solicitar-deficiencia-nome">Nova deficiência/condição</label>
-              <input type="text" id="campo-solicitar-deficiencia-nome" maxlength="200" required />
-            </div>
-            <div class="linha-botoes">
-              <button type="submit" class="btn-acesso">Enviar</button>
-              <button type="button" id="btn-cancelar-solicitar-deficiencia" class="btn-perigo">Cancelar</button>
-            </div>
-            <p id="feedback-solicitar-deficiencia" class="feedback-admin" role="status" aria-live="polite"></p>
-          </form>
         </div>
         <div class="campo-form">
           <label for="campo-criar-materia">Matéria</label>
@@ -114,17 +103,6 @@
             <option value="">Selecione a matéria</option>
           </select>
           <button type="button" id="btn-solicitar-materia" class="btn-mini">➕ Adicionar nova matéria</button>
-          <form id="form-solicitar-materia" class="form-solicitacao-estrutura" hidden>
-            <div class="campo-form">
-              <label for="campo-solicitar-materia-nome">Nome da matéria</label>
-              <input type="text" id="campo-solicitar-materia-nome" maxlength="200" required />
-            </div>
-            <div class="linha-botoes">
-              <button type="submit" class="btn-acesso">Enviar</button>
-              <button type="button" id="btn-cancelar-solicitar-materia" class="btn-perigo">Cancelar</button>
-            </div>
-            <p id="feedback-solicitar-materia" class="feedback-admin" role="status" aria-live="polite"></p>
-          </form>
         </div>
         <div class="campo-form">
           <label for="campo-criar-youtube">Link do vídeo (YouTube)</label>
@@ -134,10 +112,44 @@
           <label for="campo-criar-documento">Link do material adaptado</label>
           <input type="url" id="campo-criar-documento" required placeholder="https://docs.google.com/document/d/..." />
         </div>
+        <div class="campo-form">
+          <label for="campo-criar-pdf">📄 Anexar PDF da aula</label>
+          <input type="file" id="campo-criar-pdf" accept="application/pdf" />
+          <small id="info-pdf-aula" class="item-meta">Nenhum PDF selecionado. Máximo: 5 MB.</small>
+        </div>
+        <div class="campo-form" id="campo-gratuita-wrap" hidden>
+          <label for="campo-aula-gratuita">
+            <input type="checkbox" id="campo-aula-gratuita" /> ☑ Deixar esta aula gratuita
+          </label>
+        </div>
         <div class="linha-botoes">
           <button type="submit" id="btn-enviar-aula" class="btn-acesso">📤 Enviar para análise</button>
         </div>
         <p id="feedback-criar" class="feedback-admin" role="status" aria-live="polite"></p>
+      </form>
+
+      <form id="form-solicitar-deficiencia" class="form-solicitacao-estrutura" hidden>
+        <div class="campo-form">
+          <label for="campo-solicitar-deficiencia-nome">Nova deficiência/condição</label>
+          <input type="text" id="campo-solicitar-deficiencia-nome" maxlength="200" required />
+        </div>
+        <div class="linha-botoes">
+          <button type="submit" class="btn-acesso">Enviar</button>
+          <button type="button" id="btn-cancelar-solicitar-deficiencia" class="btn-perigo">Cancelar</button>
+        </div>
+        <p id="feedback-solicitar-deficiencia" class="feedback-admin" role="status" aria-live="polite"></p>
+      </form>
+
+      <form id="form-solicitar-materia" class="form-solicitacao-estrutura" hidden>
+        <div class="campo-form">
+          <label for="campo-solicitar-materia-nome">Nome da matéria</label>
+          <input type="text" id="campo-solicitar-materia-nome" maxlength="200" required />
+        </div>
+        <div class="linha-botoes">
+          <button type="submit" class="btn-acesso">Enviar</button>
+          <button type="button" id="btn-cancelar-solicitar-materia" class="btn-perigo">Cancelar</button>
+        </div>
+        <p id="feedback-solicitar-materia" class="feedback-admin" role="status" aria-live="polite"></p>
       </form>
 
       <h3 id="titulo-minhas">Minhas aulas</h3>
@@ -199,6 +211,7 @@
         <a class="aba-admin ativa" href="#dashboard-admin">Dashboard</a>
         <a class="aba-admin" href="#aulas-admin">Aulas</a>
         <a class="aba-admin" href="#conteudo-admin">Conteúdo</a>
+        <a class="aba-admin" href="#premium-admin">Premium</a>
         <a class="aba-admin" href="#denuncias-admin">Denúncias</a>
       </nav>
 
@@ -268,6 +281,11 @@
         <div class="campo-form">
           <label for="campo-documento">Link do material adaptado</label>
           <input type="url" id="campo-documento" required placeholder="https://docs.google.com/document/d/..." />
+        </div>
+        <div class="campo-form">
+          <label for="campo-pdf-admin">📄 PDF da aula</label>
+          <input type="file" id="campo-pdf-admin" accept="application/pdf" />
+          <small id="info-pdf-admin" class="item-meta">Nenhum PDF novo selecionado.</small>
         </div>
         <div class="linha-botoes">
           <button type="submit" id="btn-salvar-aula" class="btn-acesso">➕ Adicionar aula</button>
@@ -339,14 +357,20 @@
       <ul id="lista-materias" class="lista-admin"></ul>
       <p id="materias-vazio" class="sem-resultados" role="status" hidden>Nenhuma matéria cadastrada.</p>
 
+      <section id="premium-admin" class="secao-admin" aria-labelledby="titulo-premium-admin">
+        <h3 id="titulo-premium-admin">Premium</h3>
+        <ul id="lista-premium-admin" class="lista-admin"></ul>
+        <p id="premium-admin-vazio" class="sem-resultados" role="status" hidden>Nenhum usuário premium ativo.</p>
+      </section>
+
       <section id="denuncias-admin" class="secao-admin" aria-labelledby="titulo-denuncias">
-        <h3 id="titulo-denuncias">5. Denúncias</h3>
+        <h3 id="titulo-denuncias">6. Denúncias</h3>
         <ul id="lista-denuncias" class="lista-admin"></ul>
         <p id="denuncias-vazio" class="sem-resultados" role="status" hidden>Nenhuma denúncia pendente.</p>
       </section>
 
       <section id="pagamentos-admin" class="secao-admin" aria-labelledby="titulo-pagamentos">
-        <h3 id="titulo-pagamentos">6. Solicitações de pagamento</h3>
+        <h3 id="titulo-pagamentos">7. Solicitações de pagamento</h3>
         <p class="painel-intro">Confirme o recebimento diretamente no extrato da conta responsável. Nunca aprove apenas com base em comprovante enviado.</p>
         <select id="filtro-pagamentos-admin" class="select-bloco">
           <option value="pendente">Pendentes</option>
@@ -368,6 +392,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
