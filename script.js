@@ -31,7 +31,9 @@ var materiaEmEdicao = null;       // id da matéria em edição
 var firebasePronto = false;
 var ouvintesUsuario = [];
 var ouvintesEstrutura = [];
-var PDF_MAX_BYTES = 5 * 1024 * 1024;
+var PDF_MAX_BYTES = 500 * 1024 * 1024;
+var PDF_MAX_MESSAGE = "O PDF é muito grande. O tamanho máximo permitido é 500 MB.";
+var PDF_DEFAULT_MESSAGE = "Nenhum PDF selecionado. Máximo: 500 MB.";
 
 // Aulas iniciais: reserva caso o banco esteja inacessível (sem internet ou sem Firebase).
 var AULAS_INICIAIS = [
@@ -530,11 +532,14 @@ function atualizarNomeArquivoPdf(inputId, nomeId, textoPadrao) {
 
 function validarPdfArquivo(arquivo) {
   if (!arquivo) return { valido: true, arquivo: null };
-  if (arquivo.type && !/pdf/i.test(arquivo.type)) {
-    return { valido: false, mensagem: "Selecione somente arquivos PDF para anexar à aula." };
+  var nome = String(arquivo.name || "").trim();
+  var extensaoPdf = /\.pdf$/i.test(nome);
+  var tipoPdf = arquivo.type === "application/pdf";
+  if (!extensaoPdf || !tipoPdf) {
+    return { valido: false, mensagem: "Selecione somente arquivos PDF (.pdf) com tipo application/pdf." };
   }
   if (arquivo.size > PDF_MAX_BYTES) {
-    return { valido: false, mensagem: "O PDF excedeu o limite de 5 MB. Escolha um arquivo menor." };
+    return { valido: false, mensagem: PDF_MAX_MESSAGE };
   }
   return { valido: true, arquivo: arquivo };
 }
@@ -544,6 +549,12 @@ function subirPdfSeNecessario(arquivo, uid) {
   if (!firebasePronto || !firebase.storage || !firebase.storage()) {
     return Promise.reject(new Error("Firebase Storage não está disponível."));
   }
+  var usuarioAutenticado = firebase.auth && firebase.auth().currentUser;
+  if (!usuarioAutenticado || !usuarioAutenticado.uid || usuarioAutenticado.uid !== uid) {
+    return Promise.reject(new Error("Usuário não autenticado para enviar o PDF."));
+  }
+  var validacao = validarPdfArquivo(arquivo);
+  if (!validacao.valido) return Promise.reject(new Error(validacao.mensagem));
   var nomeArquivo = "aulas/" + uid + "/" + Date.now() + "_" + String(arquivo.name || "arquivo.pdf").replace(/\s+/g, "_");
   var ref = firebase.storage().ref().child(nomeArquivo);
   return ref.put(arquivo).then(function (snapshot) {
@@ -1503,7 +1514,7 @@ function enviarAulaAnalise(evento) {
       }
       var formulario = document.getElementById("form-criar-aula");
       if (formulario) formulario.reset();
-      atualizarNomeArquivoPdf("campo-criar-pdf", "info-pdf-aula", "Nenhum PDF selecionado. Máximo: 5 MB.");
+      atualizarNomeArquivoPdf("campo-criar-pdf", "info-pdf-aula", PDF_DEFAULT_MESSAGE);
       if (campoGratuita) campoGratuita.checked = false;
       atualizarOpcaoGratuita();
       minhaAulaEmEdicao = null;
@@ -1607,7 +1618,7 @@ function iniciarEdicaoMinhaAula(aula) {
   campos.documento.value = aula.documento;
   if (campos.gratuidade) campos.gratuidade.checked = !!aula.gratuita;
   if (campos.pdf) campos.pdf.value = "";
-  atualizarNomeArquivoPdf("campo-criar-pdf", "info-pdf-aula", aula.pdfNome ? "PDF atual: " + aula.pdfNome : "Nenhum PDF anexado. Máximo: 5 MB.");
+  atualizarNomeArquivoPdf("campo-criar-pdf", "info-pdf-aula", aula.pdfNome ? "PDF atual: " + aula.pdfNome : PDF_DEFAULT_MESSAGE);
   atualizarSelects();
   campos.deficiencia.value = aula.deficienciaId || "";
   popularMaterias(campos.materia, campos.deficiencia.value, "Selecione a matéria", MATERIAS);
@@ -2205,6 +2216,11 @@ function cancelarEdicao() {
 
 function salvarAula(evento) {
   evento.preventDefault();
+  var usuarioAutenticado = firebasePronto && firebase.auth ? firebase.auth().currentUser : null;
+  if (!usuarioAutenticado || !usuarioAutenticado.uid || !ehAdministrador(usuarioAutenticado)) {
+    alert("Somente um administrador autenticado pode salvar aulas pelo painel.");
+    return;
+  }
   var campoTitulo = document.getElementById("campo-titulo");
   var campoDescricao = document.getElementById("campo-descricao");
   var campoDeficiencia = document.getElementById("campo-deficiencia");
@@ -2255,7 +2271,7 @@ function salvarAula(evento) {
     if (!firebasePronto || !firebase.storage) {
       throw new Error("Firebase Storage não está disponível.");
     }
-    return subirPdfSeNecessario(arquivoPdf, usuarioAtual ? usuarioAtual.uid : "admin");
+    return subirPdfSeNecessario(arquivoPdf, usuarioAutenticado.uid);
   }).then(function (pdfSalvo) {
     if (pdfSalvo && (pdfSalvo.pdfUrl || pdfSalvo.pdfNome || pdfSalvo.pdfPath)) {
       dados.pdfUrl = pdfSalvo.pdfUrl || "";
@@ -3131,7 +3147,7 @@ document.addEventListener("DOMContentLoaded", function () {
   var campoPdfAula = document.getElementById("campo-criar-pdf");
   if (campoPdfAula) {
     campoPdfAula.addEventListener("change", function () {
-      atualizarNomeArquivoPdf("campo-criar-pdf", "info-pdf-aula", "Nenhum PDF selecionado. Máximo: 5 MB.");
+      atualizarNomeArquivoPdf("campo-criar-pdf", "info-pdf-aula", PDF_DEFAULT_MESSAGE);
     });
   }
   var campoPdfAdmin = document.getElementById("campo-pdf-admin");
