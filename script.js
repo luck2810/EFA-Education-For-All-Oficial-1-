@@ -134,8 +134,7 @@ var FIREBASE_CONFIG = {
 var PRECO_PREMIUM = 5;
 var DIAS_PREMIUM = 30;
 var CHAVE_PIX_EFA = "164.251.299-05";
-var WHATSAPP_ADMIN_PREMIUM = "554198466045";
-var MENSAGEM_WHATSAPP_PREMIUM = "Olá! Quero adquirir o Premium do EFA. Vou enviar o comprovante do Pix por aqui.";
+var LINK_WHATSAPP_APOIO = "https://wa.me/554197249986";
 
 function iniciarFirebase() {
   var botao = document.getElementById("btn-google");
@@ -354,12 +353,11 @@ function configurarPremiumPublico() {
   var instrucoes = document.getElementById("instrucoes-pix");
   var botaoPix = document.getElementById("btn-copiar-pix");
   var botaoWhatsApp = document.getElementById("btn-whatsapp-premium");
-  var botaoSolicitar = document.getElementById("btn-solicitar-premium");
-  var formularioSolicitacao = document.getElementById("form-solicitar-premium");
+  var botaoApoio = document.getElementById("btn-apoio-projeto");
+  var conteudoApoio = document.getElementById("conteudo-apoio-projeto");
   var feedback = document.getElementById("feedback-premium");
   if (instrucoes) {
-    instrucoes.textContent = "Plano Premium: R$ " + PRECO_PREMIUM.toFixed(2).replace(".", ",") +
-      " por " + DIAS_PREMIUM + " dias. Chave Pix: " + (CHAVE_PIX_EFA || "não cadastrada");
+    instrucoes.textContent = "Chave Pix para apoiar o projeto: " + (CHAVE_PIX_EFA || "não cadastrada");
   }
   if (botaoPix) {
     botaoPix.disabled = !CHAVE_PIX_EFA;
@@ -370,34 +368,27 @@ function configurarPremiumPublico() {
         return;
       }
       navigator.clipboard.writeText(CHAVE_PIX_EFA).then(function () {
-        if (feedback) feedback.textContent = "Chave Pix copiada. Envie o comprovante pelo WhatsApp.";
+        if (feedback) feedback.textContent = "Chave Pix copiada. Obrigado por apoiar o projeto!";
       }).catch(function () {
         if (feedback) feedback.textContent = "Não foi possível copiar automaticamente. Copie a chave exibida acima.";
       });
     });
   }
   if (botaoWhatsApp) {
-    botaoWhatsApp.disabled = !WHATSAPP_ADMIN_PREMIUM;
+    botaoWhatsApp.disabled = !LINK_WHATSAPP_APOIO;
     botaoWhatsApp.addEventListener("click", function () {
-      if (!WHATSAPP_ADMIN_PREMIUM) return;
-      var url = "https://wa.me/" + WHATSAPP_ADMIN_PREMIUM + "?text=" + encodeURIComponent(MENSAGEM_WHATSAPP_PREMIUM);
-      window.open(url, "_blank", "noopener,noreferrer");
+      if (!LINK_WHATSAPP_APOIO) return;
+      window.open(LINK_WHATSAPP_APOIO, "_blank", "noopener,noreferrer");
     });
   }
-  if (botaoSolicitar) {
-    botaoSolicitar.addEventListener("click", function () {
-      if (!usuarioAtual) {
-        alert("Entre com o Google para solicitar o Premium.");
-        return;
-      }
-      var campoNome = document.getElementById("campo-premium-nome");
-      var campoEmail = document.getElementById("campo-premium-email");
-      if (campoNome) campoNome.value = usuarioAtual.displayName || "";
-      atualizarEmailSolicitacaoPremium(usuarioAtual);
-      if (formularioSolicitacao) formularioSolicitacao.hidden = !formularioSolicitacao.hidden;
+  if (botaoApoio && conteudoApoio) {
+    botaoApoio.addEventListener("click", function () {
+      var expandido = botaoApoio.getAttribute("aria-expanded") === "true";
+      conteudoApoio.hidden = expandido;
+      botaoApoio.setAttribute("aria-expanded", expandido ? "false" : "true");
+      botaoApoio.textContent = expandido ? "Apoiar projeto" : "Fechar apoio";
     });
   }
-  if (formularioSolicitacao) formularioSolicitacao.addEventListener("submit", criarSolicitacaoPremium);
 }
 
 // ---------- Administrador e utilitários ----------

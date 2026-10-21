@@ -165,38 +165,22 @@
       <ul id="lista-transacoes" class="lista-transacoes"></ul>
       <p id="transacoes-vazio" class="sem-resultados" role="status" hidden>Nenhuma transação ainda.</p>
 
-      <div class="cartao-premium" aria-labelledby="titulo-premium">
-        <h3 id="titulo-premium">⭐ EFA Premium</h3>
-        <p>R$ 5,00 por 30 dias: acesso ilimitado a todas as aulas, sem gastar Coins.</p>
-        <p>Faça o Pix e envie o comprovante pelo WhatsApp do administrador. A liberação é manual após a confirmação do pagamento.</p>
-        <p id="instrucoes-pix" class="item-meta"></p>
-        <p id="status-premium" class="item-meta"></p>
+      <div class="cartao-premium" aria-labelledby="titulo-apoio">
+        <h3 id="titulo-apoio">Apoie o projeto EFA</h3>
+        <p>Sua contribuição ajuda a manter o projeto. O apoio pode ser feito via Pix.</p>
         <div class="linha-botoes">
-          <button type="button" id="btn-copiar-pix" class="btn-acesso">Copiar chave Pix</button>
-          <button type="button" id="btn-whatsapp-premium" class="btn-acesso">Falar com o administrador</button>
-          <button type="button" id="btn-solicitar-premium" class="btn-acesso">Solicitar Premium</button>
+          <button type="button" id="btn-apoio-projeto" class="btn-acesso" aria-expanded="false" aria-controls="conteudo-apoio-projeto">Apoiar projeto</button>
         </div>
-        <p id="feedback-premium" class="feedback-admin" role="status" aria-live="polite"></p>
-        <form id="form-solicitar-premium" class="form-premium" hidden>
-          <div class="campo-form">
-            <label for="campo-premium-nome">Nome</label>
-            <input type="text" id="campo-premium-nome" required maxlength="120" />
+        <div id="conteudo-apoio-projeto" hidden>
+          <p id="instrucoes-pix" class="item-meta"></p>
+          <div class="linha-botoes">
+            <button type="button" id="btn-copiar-pix" class="btn-acesso">Copiar chave Pix</button>
+            <button type="button" id="btn-whatsapp-premium" class="btn-acesso">Falar com Bryan</button>
           </div>
-          <div class="campo-form">
-            <label for="campo-premium-email">E-mail da conta Google</label>
-            <input type="email" id="campo-premium-email" required autocomplete="email" />
-          </div>
-          <div class="campo-form">
-            <label for="campo-premium-transacao">Identificador da transação (opcional)</label>
-            <input type="text" id="campo-premium-transacao" maxlength="120" />
-          </div>
-          <div class="campo-form">
-            <label for="campo-premium-observacao">Observação (opcional)</label>
-            <textarea id="campo-premium-observacao" rows="2" maxlength="300"></textarea>
-          </div>
-          <button type="submit" class="btn-acesso" id="btn-enviar-solicitacao">Enviar solicitação</button>
-        </form>
-        <h4>Minhas solicitações</h4>
+          <p id="feedback-premium" class="feedback-admin" role="status" aria-live="polite"></p>
+        </div>
+        <p id="status-premium" class="item-meta"></p>
+        <h4>Histórico de solicitações Premium</h4>
         <ul id="lista-solicitacoes-premium" class="lista-admin"></ul>
         <p id="solicitacoes-premium-vazio" class="sem-resultados" role="status" hidden>Nenhuma solicitação enviada.</p>
       </div>
